@@ -15,8 +15,8 @@
 | Field | Value |
 |---|---|
 | Active day | Day 3 |
-| Next task | D3.7 README + design doc finalisation; then close D1.1/D3.3–D3.6 (first commit, push, Jaeger screenshot, fresh-clone check) once Kumar approves |
-| Blockers | Commit/push need Kumar's go-ahead (AGENTS.md §8) |
+| Next task | D3.7 README + design doc finalisation; D3.3 needs only a Jaeger UI screenshot |
+| Blockers | None |
 | Last updated | 2026-10-27 (D2.4–D3.6 session; 230 tests green) |
 
 ## Progress Summary
@@ -24,9 +24,9 @@
 | Phase | Tasks | Done | Status |
 |---|---|---|---|
 | Day 0 — Planning | 6 | 6 | `[x]` |
-| Day 1 — Foundations: solution, domain, mocks, adapters | 7 | 6 (+D1.1 commit pending) | `[~]` |
+| Day 1 — Foundations: solution, domain, mocks, adapters | 7 | 7 | `[x]` |
 | Day 2 — Aggregation, resilience, cache, persistence, API | 7 | 7 | `[x]` |
-| Day 3 — Observability, packaging, docs (**submission-ready**) | 7 | 2 (+4 partial) | `[~]` |
+| Day 3 — Observability, packaging, docs (**submission-ready**) | 7 | 5 (+D3.3 partial) | `[~]` |
 | Day 4 — Frontend demo client | 6 | 0 | `[ ]` |
 | Day 5 — Smart features, hardening, video | 7 | 0 | `[ ]` |
 
@@ -45,11 +45,11 @@
 
 ---
 
-## Day 1 — Foundations `[~]`
+## Day 1 — Foundations `[x]`
 
 Goal: solution structure, pure domain logic, both mock systems and both adapters, all tested. No aggregation yet.
 
-- [~] **D1.1 Solution bootstrap** — _all done except the first commit, which awaits Kumar's go-ahead (AGENTS.md §8)_
+- [x] **D1.1 Solution bootstrap**
   - Install the .NET 10 SDK. `global.json` (SDK 10.0, `rollForward: latestFeature`).
   - `Directory.Build.props` (net10.0, nullable, implicit usings, warnings as errors, `AnalysisLevel latest-recommended`) and `Directory.Packages.props` (Central Package Management) — D-017.
   - `DocViewer.slnx` with projects per DESIGN.md §17: `src/DocViewer.{Domain,Application,Infrastructure,Api}`, `mocks/{Mocks.Common,SalesSystem.Mock,ServiceSystem.Mock}`, `tests/DocViewer.{Domain,Application,Infrastructure,Api}.Tests`, `tests/Mocks.Tests`.
@@ -139,13 +139,13 @@ Goal: **submission-ready.** Everything the brief requires exists and runs from a
 - [~] **D3.3 Tracing** — OpenTelemetry tracing (ASP.NET Core, HttpClient, EF Core) + `ActivitySource("DocViewer")` spans; OTLP exporter; `traceId` in body and `X-Trace-Id`. — _verified via Jaeger API (span tree in docs/diagrams/trace-example.md); UI screenshot still to take_
   - ✅ Manual check in Jaeger / Aspire dashboard: one trace shows two parallel source spans (screenshot in `docs/diagrams/`).
 
-- [~] **D3.4 Docker Compose** — multi-stage Dockerfiles (SDK build → chiselled ASP.NET runtime) for API and mocks; `docker-compose.yml` with api, sales-mock, service-mock, postgres, redis, healthchecks; `obs` profile with Prometheus, Grafana (provisioned dashboard), Jaeger. — _full stack incl. obs profile verified from the working tree; re-check from a fresh clone after the first commit_
+- [x] **D3.4 Docker Compose** — multi-stage Dockerfiles (SDK build → chiselled ASP.NET runtime) for API and mocks; `docker-compose.yml` with api, sales-mock, service-mock, postgres, redis, healthchecks; `obs` profile with Prometheus, Grafana (provisioned dashboard), Jaeger.
   - ✅ Clean clone → `docker compose up --build` → cURL demo works.
 
-- [~] **D3.5 OpenAPI** — `Microsoft.AspNetCore.OpenApi` + build-time generation to `docs/openapi.json`; examples and descriptions on endpoints; Scalar UI in Development. — _docs/openapi.json generated deterministically on build, served at /openapi/v1.json, Scalar in Development; commit pending approval_
+- [x] **D3.5 OpenAPI** — `Microsoft.AspNetCore.OpenApi` + build-time generation to `docs/openapi.json`; examples and descriptions on endpoints; Scalar UI in Development.
   - ✅ Spec committed; CI fails if `git diff --exit-code docs/openapi.json` shows drift after build.
 
-- [~] **D3.6 CI** — `.github/workflows/ci.yml`: setup-dotnet 10, restore, build (warnings as errors), `dotnet format --verify-no-changes`, test + coverage, OpenAPI drift. — _workflow written and YAML-valid; a green GitHub run needs a push (Kumar's approval)_
+- [x] **D3.6 CI** — `.github/workflows/ci.yml`: setup-dotnet 10, restore, build (warnings as errors), `dotnet format --verify-no-changes`, test + coverage, OpenAPI drift.
   - ✅ Green run on GitHub.
 
 - [ ] **D3.7 README and design doc finalisation** — README: overview, prerequisites, quick start (Docker and `dotnet run`), tests, cURL/`.http` demo, fault-injection demo, layout, **AI Collaboration Narrative** (strategy, verification, quality — from SYSTEMS.md §4 and the Session Log). DESIGN.md §19 refreshed; version 1.0.
@@ -200,6 +200,7 @@ Newest first. One entry per working session. Keep each entry short.
 
 | Date | Agent / person | Tasks touched | Outcome | Notes / next step |
 |---|---|---|---|---|
+| 2026-10-27 | Claude Code (with Kumar) | D1.1, D3.4–D3.6 | First commit pushed to private repo kumarabhik/keyloop-document-viewer; first CI run green (build, format, tests + coverage gate, OpenAPI drift, Docker build); fresh clone → `docker compose up --build` → demo works without a .env. | Next: D3.7 README; Jaeger screenshot for D3.3. Optional: bump actions to Node 24 versions (deprecation warning only). |
 | 2026-10-27 | Claude Code (with Kumar) | D2.4–D3.6 | Day 2 done; D3.1–D3.2 done; D3.3–D3.6 built and verified, each waiting on commit/push or a screenshot. 230 tests green, 0 warnings, format clean. Coverage: Domain 99.0 %, Application 98.4 %, Infrastructure 93.3 %, Api 93.7 %. Docker stack verified end to end (Postgres, Redis, Jaeger trace, Prometheus, Grafana). Found and fixed a raw-VIN leak in log scopes and span URLs (E-007). New: D-020…D-022, E-005…E-009, AI-008, Q3. | Next: D3.7 README. Ask Kumar: first commit + push (closes D1.1, D3.5, D3.6), Q3 readiness semantics. |
 | 2026-10-27 | Claude Code (with Kumar) | D1.1–D2.3 | 9 tasks done, D1.1 awaiting commit. 169 tests green, 0 warnings. Coverage: Domain 99 %, Application 80 %, Infrastructure 76 %. New: D-018, D-019, E-001…E-004, AI-007. | Next: D2.4 AggregationService. Ask Kumar about the first commit. |
 | 2026-10-27 | Claude Code (with Kumar) | D0.6, D1.1, D1.2 | Python scaffold for D1.1–D1.2 built, then discarded on switch to .NET (D-013, AI-006). Docs re-platformed. | Install .NET 10 SDK, then restart D1.1 |
