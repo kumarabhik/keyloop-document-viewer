@@ -1,0 +1,484 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "Unified Document Viewer API",
+    "description": "One VIN search across the dealership's Sales and Service systems. Every document names its source; a failing source makes the response partial (200), never an error.",
+    "version": "v1"
+  },
+  "paths": {
+    "/api/v1/vehicles/{vin}/documents": {
+      "get": {
+        "tags": [
+          "Documents"
+        ],
+        "summary": "Documents for a vehicle from all source systems",
+        "description": "Calls the Sales and Service systems in parallel and returns one merged list. Each document names its source. If a source fails, the response is still 200 with partial=true; 503 only when no source answered and no snapshot exists.",
+        "operationId": "GetVehicleDocuments",
+        "parameters": [
+          {
+            "name": "vin",
+            "in": "path",
+            "description": "17-character VIN; case-insensitive, surrounding spaces ignored. Letters I, O and Q are not allowed.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "description": "Only these sources: SALES, SERVICE. Repeat or comma-separate.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "description": "Only these types, e.g. INSURANCE, PUC, JOB_CARD. Repeat or comma-separate.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Only these statuses: VALID, EXPIRING_SOON, EXPIRED, NOT_APPLICABLE.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "description": "true skips the cache read; a complete result is still cached.",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sources/health": {
+      "get": {
+        "tags": [
+          "Documents"
+        ],
+        "summary": "Circuit-breaker state and last observed outcome per source",
+        "operationId": "GetSourceHealth",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SourceHealthResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CacheStatus": {
+        "enum": [
+          "HIT",
+          "MISS",
+          "BYPASS"
+        ]
+      },
+      "CircuitState": {
+        "enum": [
+          "closed",
+          "half_open",
+          "open",
+          "isolated"
+        ]
+      },
+      "DocumentMarker": {
+        "enum": [
+          "POSSIBLE_DUPLICATE",
+          "CONFLICT",
+          "STALE"
+        ]
+      },
+      "DocumentResponse": {
+        "required": [
+          "id",
+          "sourceId",
+          "vin",
+          "title",
+          "type",
+          "date",
+          "expiryDate",
+          "source",
+          "status",
+          "flags",
+          "metadata"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "vin": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/DocumentType"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "expiryDate": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
+          },
+          "source": {
+            "$ref": "#/components/schemas/SourceSystem"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DocumentStatus"
+          },
+          "flags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentMarker"
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "DocumentsResponse": {
+        "required": [
+          "vin",
+          "partial",
+          "generatedAt",
+          "cache",
+          "traceId",
+          "sources",
+          "summary",
+          "documents"
+        ],
+        "type": "object",
+        "properties": {
+          "vin": {
+            "type": "string"
+          },
+          "partial": {
+            "type": "boolean"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cache": {
+            "$ref": "#/components/schemas/CacheStatus"
+          },
+          "traceId": {
+            "type": "string"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SourceStatusResponse"
+            }
+          },
+          "summary": {
+            "$ref": "#/components/schemas/DocumentSummary"
+          },
+          "documents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentResponse"
+            }
+          }
+        }
+      },
+      "DocumentStatus": {
+        "enum": [
+          "NOT_APPLICABLE",
+          "VALID",
+          "EXPIRING_SOON",
+          "EXPIRED"
+        ]
+      },
+      "DocumentSummary": {
+        "required": [
+          "total",
+          "expired",
+          "expiringSoon",
+          "duplicates",
+          "conflicts"
+        ],
+        "type": "object",
+        "properties": {
+          "total": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "expired": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "expiringSoon": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "duplicates": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "conflicts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "DocumentType": {
+        "enum": [
+          "INVOICE",
+          "RC",
+          "INSURANCE",
+          "PUC",
+          "WARRANTY",
+          "JOB_CARD",
+          "SERVICE_HISTORY",
+          "OTHER"
+        ]
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "detail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "instance": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "SourceHealthResponse": {
+        "required": [
+          "name",
+          "circuit",
+          "lastStatus",
+          "lastLatencyMs",
+          "lastCheckedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "$ref": "#/components/schemas/SourceSystem"
+          },
+          "circuit": {
+            "$ref": "#/components/schemas/CircuitState"
+          },
+          "lastStatus": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SourceStatus"
+              }
+            ]
+          },
+          "lastLatencyMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "lastCheckedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "SourceStatus": {
+        "enum": [
+          "ok",
+          "stale",
+          "timeout",
+          "error",
+          "circuit_open"
+        ]
+      },
+      "SourceStatusResponse": {
+        "required": [
+          "name",
+          "status",
+          "latencyMs",
+          "count",
+          "asOf",
+          "error"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "$ref": "#/components/schemas/SourceSystem"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SourceStatus"
+          },
+          "latencyMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "count": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "asOf": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "error": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "SourceSystem": {
+        "enum": [
+          "SALES",
+          "SERVICE"
+        ]
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Documents"
+    }
+  ]
+}

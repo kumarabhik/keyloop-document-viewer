@@ -1,0 +1,20 @@
+<Solution>
+  <Folder Name="/mocks/">
+    <Project Path="mocks/Mocks.Common/Mocks.Common.csproj" />
+    <Project Path="mocks/SalesSystem.Mock/SalesSystem.Mock.csproj" />
+    <Project Path="mocks/ServiceSystem.Mock/ServiceSystem.Mock.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/DocViewer.Api/DocViewer.Api.csproj" />
+    <Project Path="src/DocViewer.Application/DocViewer.Application.csproj" />
+    <Project Path="src/DocViewer.Domain/DocViewer.Domain.csproj" />
+    <Project Path="src/DocViewer.Infrastructure/DocViewer.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DocViewer.Api.Tests/DocViewer.Api.Tests.csproj" />
+    <Project Path="tests/DocViewer.Application.Tests/DocViewer.Application.Tests.csproj" />
+    <Project Path="tests/DocViewer.Domain.Tests/DocViewer.Domain.Tests.csproj" />
+    <Project Path="tests/DocViewer.Infrastructure.Tests/DocViewer.Infrastructure.Tests.csproj" />
+    <Project Path="tests/Mocks.Tests/Mocks.Tests.csproj" />
+  </Folder>
+</Solution>

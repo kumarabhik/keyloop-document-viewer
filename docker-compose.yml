@@ -1,0 +1,111 @@
+# docker compose up --build                 → API :8080, Sales mock :8081, Service mock :8082, Postgres, Redis
+# docker compose --profile obs up --build   → + Prometheus :9090, Grafana :3000, Jaeger :16686
+# Every variable has a working default, so a clean clone runs without a .env file (see .env.example).
+name: docviewer
+
+x-dotnet-app: &dotnet-app
+  restart: unless-stopped
+  environment: &dotnet-env
+    ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+
+services:
+  api:
+    <<: *dotnet-app
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: api
+      args:
+        PROJECT: src/DocViewer.Api/DocViewer.Api.csproj
+    ports: ["8080:8080"]
+    environment:
+      <<: *dotnet-env
+      ConnectionStrings__DocViewer: Host=postgres;Database=${POSTGRES_DB:-docviewer};Username=${POSTGRES_USER:-docviewer};Password=${POSTGRES_PASSWORD:-docviewer-local}
+      ConnectionStrings__Redis: redis:6379
+      Persistence__Provider: Postgres
+      Persistence__VinHashSalt: ${VIN_HASH_SALT:-local-demo-salt-change-me}
+      Sources__Sales__BaseUrl: http://sales-mock:8080
+      Sources__Service__BaseUrl: http://service-mock:8080
+      Cors__AllowedOrigins__0: http://localhost:5173
+      # Traces go to Jaeger when the obs profile runs; without it the exporter fails silently.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4317}
+      OTEL_SERVICE_NAME: docviewer-api
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      sales-mock: { condition: service_started }
+      service-mock: { condition: service_started }
+
+  sales-mock:
+    <<: *dotnet-app
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: sales-mock
+      args:
+        PROJECT: mocks/SalesSystem.Mock/SalesSystem.Mock.csproj
+    ports: ["8081:8080"]
+
+  service-mock:
+    <<: *dotnet-app
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: service-mock
+      args:
+        PROJECT: mocks/ServiceSystem.Mock/ServiceSystem.Mock.csproj
+    ports: ["8082:8080"]
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-docviewer}
+      POSTGRES_USER: ${POSTGRES_USER:-docviewer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-docviewer-local}
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  prometheus:
+    image: prom/prometheus:v3.7.0
+    profiles: [obs]
+    ports: ["9090:9090"]
+    volumes: ["./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro"]
+    depends_on: [api]
+
+  grafana:
+    image: grafana/grafana:12.2.0
+    profiles: [obs]
+    ports: ["3000:3000"]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on: [prometheus]
+
+  jaeger:
+    image: jaegertracing/jaeger:2.11.0
+    profiles: [obs]
+    ports:
+      - "16686:16686" # UI
+      - "4317:4317"   # OTLP gRPC
+
+volumes:
+  pgdata:

@@ -1,0 +1,62 @@
+using DocViewer.Api;
+using DocViewer.Api.Contracts;
+using DocViewer.Api.Endpoints;
+using DocViewer.Api.Http;
+using DocViewer.Api.Observability;
+using DocViewer.Application;
+using DocViewer.Infrastructure;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Scalar.AspNetCore;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.UseBuildTimePlaceholders();
+builder.AddStructuredLogging();
+builder.AddTelemetry();
+
+builder.Services.AddApplication();
+builder.Services.AddInfrastructure(builder.Configuration);
+
+builder.Services.ConfigureHttpJsonOptions(o => ApiJson.Configure(o.SerializerOptions));
+builder.Services.AddProblemDetails(o => o.CustomizeProblemDetails = c =>
+    c.ProblemDetails.Extensions["traceId"] = TraceIds.Current(c.HttpContext));
+
+builder.Services.AddOpenApi(o => o.AddDocumentTransformer((document, _, _) =>
+{
+    document.Info.Title = "Unified Document Viewer API";
+    document.Info.Version = "v1";
+    document.Info.Description =
+        "One VIN search across the dealership's Sales and Service systems. Every document names its source; " +
+        "a failing source makes the response partial (200), never an error.";
+    return Task.CompletedTask;
+}));
+
+builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database", tags: ["ready"]);
+
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
+    .WithOrigins(corsOrigins)
+    .WithMethods("GET")
+    .AllowAnyHeader()
+    .WithExposedHeaders(TraceIds.HeaderName, DocumentEndpoints.CacheHeader, "Retry-After")));
+
+var app = builder.Build();
+
+app.UseExceptionHandler();
+app.UseStatusCodePages();
+app.UseTraceIdHeader();
+app.UseAccessLog();
+app.UseCors();
+
+app.MapDocumentEndpoints();
+app.MapOpenApi(); // GET /openapi/v1.json
+if (app.Environment.IsDevelopment())
+{
+    app.MapScalarApiReference(); // GET /scalar
+}
+
+app.MapHealthChecks("/healthz", new HealthCheckOptions { Predicate = _ => false }); // liveness: process is up
+app.MapHealthChecks("/readyz", new HealthCheckOptions { Predicate = c => c.Tags.Contains("ready") });
+app.MapPrometheusScrapingEndpoint(); // GET /metrics
+
+await StartupTasks.InitializeDatabaseAsync(app);
+await app.RunAsync();

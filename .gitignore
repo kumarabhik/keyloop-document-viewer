@@ -1,0 +1,29 @@
+# .NET
+bin/
+obj/
+TestResults/
+*.user
+*.suo
+.vs/
+coverage*.xml
+coverage-report/
+
+# Local data
+*.db
+*.db-shm
+*.db-wal
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+appsettings.*.local.json
+
+# Node (frontend, Day 4)
+node_modules/
+dist/
+
+# Editors / OS
+.idea/
+.DS_Store
+Thumbs.db

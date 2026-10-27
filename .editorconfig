@@ -1,0 +1,56 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{json,yml,yaml,ts,tsx,js,md,xml,csproj,props,slnx}]
+indent_size = 2
+
+[*.cs]
+# Namespaces and usings
+csharp_style_namespace_declarations = file_scoped:warning
+dotnet_sort_system_directives_first = true
+csharp_using_directive_placement = outside_namespace:warning
+
+# Style
+csharp_style_var_for_built_in_types = true:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_prefer_braces = when_multiline:suggestion
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_prefer_primary_constructors = true:suggestion
+dotnet_style_readonly_field = true:warning
+
+# Naming: private fields are _camelCase
+dotnet_naming_rule.private_fields_underscore.severity = warning
+dotnet_naming_rule.private_fields_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore.style = underscore_camel
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_style.underscore_camel.required_prefix = _
+dotnet_naming_style.underscore_camel.capitalization = camel_case
+
+# Naming: private static readonly / const are PascalCase
+dotnet_naming_rule.private_static_readonly.severity = warning
+dotnet_naming_rule.private_static_readonly.symbols = private_static_readonly
+dotnet_naming_rule.private_static_readonly.style = pascal
+dotnet_naming_symbols.private_static_readonly.applicable_kinds = field
+dotnet_naming_symbols.private_static_readonly.applicable_accessibilities = private
+dotnet_naming_symbols.private_static_readonly.required_modifiers = static, readonly
+dotnet_naming_rule.constants.severity = warning
+dotnet_naming_rule.constants.symbols = constants
+dotnet_naming_rule.constants.style = pascal
+dotnet_naming_symbols.constants.applicable_kinds = field
+dotnet_naming_symbols.constants.required_modifiers = const
+dotnet_naming_style.pascal.capitalization = pascal_case
+
+# Library code awaits without capturing context; ASP.NET Core has none anyway.
+dotnet_diagnostic.CA2007.severity = none
+
+# EF Core migrations are generated; do not apply style rules to them.
+[**/Migrations/*.cs]
+generated_code = true

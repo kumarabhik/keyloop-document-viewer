@@ -1,0 +1,428 @@
+{
+  "MA3EWB81S00100001": {
+    "vehicle": {
+      "vin": "MA3EWB81S00100001",
+      "model": "Baleno Alpha",
+      "soldOn": "2023-06-12"
+    },
+    "documents": [
+      {
+        "docId": "INV-2023-0001",
+        "docType": "SALE_INVOICE",
+        "title": "Sales Invoice",
+        "issuedOn": "2023-06-12",
+        "validUntil": null,
+        "meta": {
+          "refNo": "BLR/23/0001",
+          "amount": "845000.00",
+          "currency": "INR",
+          "dealer": "Nexa Koramangala"
+        }
+      },
+      {
+        "docId": "RC-2023-0001",
+        "docType": "REG_CERT",
+        "title": "Registration Certificate",
+        "issuedOn": "2023-06-20",
+        "validUntil": "2038-06-19",
+        "meta": {
+          "rto": "KA-01"
+        }
+      },
+      {
+        "docId": "INS-0001",
+        "docType": "INSURANCE_POLICY",
+        "title": "Comprehensive Insurance",
+        "issuedOn": "{{today-200d}}",
+        "validUntil": "{{today+165d}}",
+        "meta": {
+          "insurer": "ICICI Lombard",
+          "policyNo": "3001/0001"
+        }
+      },
+      {
+        "docId": "WTY-0001",
+        "docType": "WARRANTY_CARD",
+        "title": "Extended Warranty",
+        "issuedOn": "2023-06-12",
+        "validUntil": "2028-06-11",
+        "meta": {
+          "refNo": "WTY-0001"
+        }
+      }
+    ]
+  },
+  "MA3EWB81S00100002": {
+    "vehicle": {
+      "vin": "MA3EWB81S00100002",
+      "model": "Swift ZXi",
+      "soldOn": "2024-01-05"
+    },
+    "documents": [
+      {
+        "docId": "INV-2024-0002",
+        "docType": "SALE_INVOICE",
+        "title": "Sales Invoice",
+        "issuedOn": "2024-01-05",
+        "validUntil": null,
+        "meta": {
+          "refNo": "BLR/24/0002",
+          "amount": "712000.00",
+          "currency": "INR"
+        }
+      },
+      {
+        "docId": "RC-2024-0002",
+        "docType": "REG_CERT",
+        "title": "Registration Certificate",
+        "issuedOn": "2024-01-15",
+        "validUntil": "2039-01-14",
+        "meta": {}
+      },
+      {
+        "docId": "INS-0002",
+        "docType": "INSURANCE_POLICY",
+        "title": "Comprehensive Insurance",
+        "issuedOn": "{{today-100d}}",
+        "validUntil": "{{today+265d}}",
+        "meta": {
+          "insurer": "HDFC Ergo"
+        }
+      }
+    ]
+  },
+  "MA3EWB81S00100005": {
+    "vehicle": {
+      "vin": "MA3EWB81S00100005",
+      "model": "Dzire VXi",
+      "soldOn": "2022-03-01"
+    },
+    "documents": [
+      {
+        "docId": "INV-2022-0005",
+        "docType": "SALE_INVOICE",
+        "title": "Sales Invoice",
+        "issuedOn": "2022-03-01",
+        "validUntil": null,
+        "meta": {
+          "refNo": "BLR/22/0005",
+          "amount": "689000.00",
+          "currency": "INR"
+        }
+      },
+      {
+        "docId": "RC-2022-0005",
+        "docType": "REG_CERT",
+        "title": "Registration Certificate",
+        "issuedOn": "2022-03-10",
+        "validUntil": "2037-03-09",
+        "meta": {}
+      },
+      {
+        "docId": "INS-0005",
+        "docType": "INSURANCE_POLICY",
+        "title": "Comprehensive Insurance",
+        "issuedOn": "{{today-385d}}",
+        "validUntil": "{{today-20d}}",
+        "meta": {
+          "insurer": "Bajaj Allianz"
+        }
+      }
+    ]
+  },
+  "MA3EWB81S00100006": {
+    "vehicle": {
+      "vin": "MA3EWB81S00100006",
+      "model": "Baleno Alpha",
+      "soldOn": "2024-02-11"
+    },
+    "documents": [
+      {
+        "docId": "INV-2024-0311",
+        "docType": "SALE_INVOICE",
+        "title": "Sales Invoice",
+        "issuedOn": "2024-02-11",
+        "validUntil": null,
+        "meta": {
+          "refNo": "BLR/24/0311",
+          "amount": "845000.00",
+          "currency": "INR"
+        }
+      },
+      {
+        "docId": "RC-2024-0311",
+        "docType": "REG_CERT",
+        "title": "Registration Certificate",
+        "issuedOn": "2024-02-20",
+        "validUntil": "2039-02-19",
+        "meta": {}
+      }
+    ]
+  },
+  "MA3EWB81S00100007": {
+    "vehicle": {
+      "vin": "MA3EWB81S00100007",
+      "model": "Brezza ZXi",
+      "soldOn": "2024-02-11"
+    },
+    "documents": [
+      {
+        "docId": "INV-2024-0707",
+        "docType": "SALE_INVOICE",
+        "title": "Sales Invoice",
+        "issuedOn": "2024-02-11",
+        "validUntil": null,
+        "meta": {
+          "refNo": "BLR/24/0707",
+          "amount": "1120000.00",
+          "currency": "INR"
+        }
+      },
+      {
+        "docId": "WTY-7007",
+        "docType": "WARRANTY_CARD",
+        "title": "Standard Warranty",
+        "issuedOn": "2024-02-11",
+        "validUntil": "2027-02-11",
+        "meta": {
+          "refNo": "WTY-7007"
+        }
+      }
+    ]
+  },
+  "MA3EWB81S00100008": {
+    "vehicle": {
+      "vin": "MA3EWB81S00100008",
+      "model": "Ertiga VXi",
+      "soldOn": "2021-01-10"
+    },
+    "documents": [
+      {
+        "docId": "INV-2021-0008",
+        "docType": "SALE_INVOICE",
+        "title": "Sales Invoice",
+        "issuedOn": "2021-01-10",
+        "validUntil": null,
+        "meta": {
+          "refNo": "BLR/21/0008",
+          "amount": "980000.00",
+          "currency": "INR"
+        }
+      },
+      {
+        "docId": "RC-2021-0008",
+        "docType": "REG_CERT",
+        "title": "Registration Certificate",
+        "issuedOn": "2021-01-20",
+        "validUntil": "2036-01-19",
+        "meta": {}
+      },
+      {
+        "docId": "INS-0008-2021",
+        "docType": "INSURANCE_POLICY",
+        "title": "Insurance renewal 2021",
+        "issuedOn": "2021-01-10",
+        "validUntil": "2022-01-09",
+        "meta": {
+          "insurer": "ICICI Lombard"
+        }
+      },
+      {
+        "docId": "INS-0008-2022",
+        "docType": "INSURANCE_POLICY",
+        "title": "Insurance renewal 2022",
+        "issuedOn": "2022-01-10",
+        "validUntil": "2023-01-09",
+        "meta": {
+          "insurer": "ICICI Lombard"
+        }
+      },
+      {
+        "docId": "INS-0008-2023",
+        "docType": "INSURANCE_POLICY",
+        "title": "Insurance renewal 2023",
+        "issuedOn": "2023-01-10",
+        "validUntil": "2024-01-09",
+        "meta": {
+          "insurer": "ICICI Lombard"
+        }
+      },
+      {
+        "docId": "INS-0008-2024",
+        "docType": "INSURANCE_POLICY",
+        "title": "Insurance renewal 2024",
+        "issuedOn": "2024-01-10",
+        "validUntil": "2025-01-09",
+        "meta": {
+          "insurer": "ICICI Lombard"
+        }
+      },
+      {
+        "docId": "INS-0008-2025",
+        "docType": "INSURANCE_POLICY",
+        "title": "Insurance renewal 2025",
+        "issuedOn": "2025-01-10",
+        "validUntil": "2026-01-09",
+        "meta": {
+          "insurer": "ICICI Lombard"
+        }
+      },
+      {
+        "docId": "ACC-0008-01",
+        "docType": "ACCESSORY_INVOICE",
+        "title": "Accessory invoice #1",
+        "issuedOn": "2021-04-10",
+        "validUntil": null,
+        "meta": {
+          "amount": "1500.00",
+          "currency": "INR"
+        }
+      },
+      {
+        "docId": "ACC-0008-02",
+        "docType": "ACCESSORY_INVOICE",
+        "title": "Accessory invoice #2",
+        "issuedOn": "2021-07-09",
+        "validUntil": null,
+        "meta": {
+          "amount": "3000.00",
+          "currency": "INR"
+        }
+      },
+      {
+        "docId": "ACC-0008-03",
+        "docType": "ACCESSORY_INVOICE",
+        "title": "Accessory invoice #3",
+        "issuedOn": "2021-10-07",
+        "validUntil": null,
+        "meta": {
+          "amount": "4500.00",
+          "currency": "INR"
+        }
+      },
+      {
+        "docId": "ACC-0008-04",
+        "docType": "ACCESSORY_INVOICE",
+        "title": "Accessory invoice #4",
+        "issuedOn": "2022-01-05",
+        "validUntil": null,
+        "meta": {
+          "amount": "6000.00",
+          "currency": "INR"
+        }
+      },
+      {
+        "docId": "ACC-0008-05",
+        "docType": "ACCESSORY_INVOICE",
+        "title": "Accessory invoice #5",
+        "issuedOn": "2022-04-05",
+        "validUntil": null,
+        "meta": {
+          "amount": "7500.00",
+          "currency": "INR"
+        }
+      },
+      {
+        "docId": "ACC-0008-06",
+        "docType": "ACCESSORY_INVOICE",
+        "title": "Accessory invoice #6",
+        "issuedOn": "2022-07-04",
+        "validUntil": null,
+        "meta": {
+          "amount": "9000.00",
+          "currency": "INR"
+        }
+      },
+      {
+        "docId": "ACC-0008-07",
+        "docType": "ACCESSORY_INVOICE",
+        "title": "Accessory invoice #7",
+        "issuedOn": "2022-10-02",
+        "validUntil": null,
+        "meta": {
+          "amount": "10500.00",
+          "currency": "INR"
+        }
+      },
+      {
+        "docId": "ACC-0008-08",
+        "docType": "ACCESSORY_INVOICE",
+        "title": "Accessory invoice #8",
+        "issuedOn": "2022-12-31",
+        "validUntil": null,
+        "meta": {
+          "amount": "12000.00",
+          "currency": "INR"
+        }
+      }
+    ]
+  },
+  "MA3EWB81S00100009": {
+    "vehicle": {
+      "vin": "MA3EWB81S00100009",
+      "model": "Celerio VXi",
+      "soldOn": "2023-09-09"
+    },
+    "documents": [
+      {
+        "docId": "INV-2023-0009",
+        "docType": "SALE_INVOICE",
+        "title": "Sales Invoice",
+        "issuedOn": "2023-09-09",
+        "validUntil": null,
+        "meta": {
+          "refNo": "BLR/23/0009",
+          "amount": "560000.00",
+          "currency": "INR"
+        }
+      },
+      {
+        "docId": "RC-2023-0009",
+        "docType": "REG_CERT",
+        "title": "Registration Certificate",
+        "issuedOn": "2023-09-18",
+        "validUntil": "2038-09-17",
+        "meta": {}
+      }
+    ]
+  },
+  "MA3EWB81S00100010": {
+    "vehicle": {
+      "vin": "MA3EWB81S00100010",
+      "model": "Grand Vitara Zeta",
+      "soldOn": "2025-01-15"
+    },
+    "documents": [
+      {
+        "docId": "INV-2025-0010",
+        "docType": "SALE_INVOICE",
+        "title": "Sales Invoice",
+        "issuedOn": "2025-01-15",
+        "validUntil": null,
+        "meta": {
+          "refNo": "BLR/25/0010",
+          "amount": "1450000.00",
+          "currency": "INR"
+        }
+      },
+      {
+        "docId": "RC-2025-0010",
+        "docType": "REG_CERT",
+        "title": "Registration Certificate",
+        "issuedOn": "2025-01-15",
+        "validUntil": "2040-01-14",
+        "meta": {}
+      },
+      {
+        "docId": "INS-0010",
+        "docType": "INSURANCE_POLICY",
+        "title": "Comprehensive Insurance",
+        "issuedOn": "2025-01-15",
+        "validUntil": "{{today+80d}}",
+        "meta": {
+          "insurer": "Tata AIG"
+        }
+      }
+    ]
+  }
+}

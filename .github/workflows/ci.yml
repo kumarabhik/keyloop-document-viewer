@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: "1"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+
+jobs:
+  build-test:
+    name: Build, format, test, coverage, contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore tools and packages
+        run: |
+          dotnet tool restore
+          dotnet restore
+
+      # Warnings are errors (Directory.Build.props, D-017). The build also regenerates docs/openapi.json.
+      - name: Build
+        run: dotnet build --no-restore
+
+      - name: Format check
+        run: dotnet format --verify-no-changes --no-restore
+
+      # Runs every test project with coverage and fails if Domain or Application drop below 85 % (D2.7).
+      - name: Test + coverage gate
+        shell: pwsh
+        run: ./scripts/coverage.ps1 -NoBuild
+
+      - name: OpenAPI contract has not drifted
+        run: |
+          if ! git diff --exit-code -- docs/openapi.json; then
+            echo "::error file=docs/openapi.json::docs/openapi.json is out of date. Run 'dotnet build' and commit the result."
+            exit 1
+          fi
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          if [ -f TestResults/coverage/report/SummaryGithub.md ]; then
+            cat TestResults/coverage/report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: TestResults/coverage/report
+          if-no-files-found: ignore
+
+  docker:
+    name: Docker images build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API and mock images
+        run: docker compose build api sales-mock service-mock

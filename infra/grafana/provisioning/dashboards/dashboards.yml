@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: docviewer
+    folder: DocViewer
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

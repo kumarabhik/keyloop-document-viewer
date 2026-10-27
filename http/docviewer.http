@@ -1,0 +1,66 @@
+# Runnable requests for VS Code REST Client, Visual Studio and Rider (DESIGN.md §7.4).
+# Start the API and both mocks first (README / AGENTS.md §7), or `docker compose up`.
+
+@api = http://localhost:8080
+@sales = http://localhost:8081
+@service = http://localhost:8082
+@vin = MA3EWB81S00100001
+
+### All documents for a vehicle (first call: X-Cache MISS, second: HIT)
+GET {{api}}/api/v1/vehicles/{{vin}}/documents
+
+### Bypass the cache
+GET {{api}}/api/v1/vehicles/{{vin}}/documents?refresh=true
+
+### Only expired documents (vehicle #5 has an expired insurance policy)
+GET {{api}}/api/v1/vehicles/MA3EWB81S00100005/documents?status=EXPIRED
+
+### Filters can be combined and repeated
+GET {{api}}/api/v1/vehicles/{{vin}}/documents?source=SERVICE&type=PUC,JOB_CARD
+
+### Invalid VIN -> 400 problem, no source is called
+GET {{api}}/api/v1/vehicles/BADVIN/documents
+
+### Unknown vehicle -> 200 with an empty list
+GET {{api}}/api/v1/vehicles/MA3EWB81S00100099/documents
+
+### Circuit state and last outcome per source
+GET {{api}}/api/v1/sources/health
+
+### Liveness / readiness
+GET {{api}}/healthz
+
+###
+GET {{api}}/readyz
+
+### --- Failure demo ---------------------------------------------------------
+
+### Make the Service mock hang (exceeds the 2 s budget)
+POST {{service}}/__admin/fault
+Content-Type: application/json
+
+{ "mode": "timeout" }
+
+### Now the search is partial: Service shows "timeout", or "stale" if a snapshot exists
+GET {{api}}/api/v1/vehicles/{{vin}}/documents?refresh=true
+
+### Break Sales too -> vehicle without snapshot gets 503 + Retry-After
+POST {{sales}}/__admin/fault
+Content-Type: application/json
+
+{ "mode": "error" }
+
+###
+GET {{api}}/api/v1/vehicles/MA3EWB81S00100010/documents
+
+### Heal both mocks
+POST {{sales}}/__admin/fault
+Content-Type: application/json
+
+{ "mode": "none" }
+
+###
+POST {{service}}/__admin/fault
+Content-Type: application/json
+
+{ "mode": "none" }

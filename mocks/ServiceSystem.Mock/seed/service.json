@@ -1,0 +1,493 @@
+{
+  "MA3EWB81S00100001": {
+    "records": [
+      {
+        "record_no": "SV-JC-10001",
+        "category": "JC",
+        "description": "First free service",
+        "created": "15/09/2023",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 1012
+      },
+      {
+        "record_no": "SV-JC-10002",
+        "category": "JC",
+        "description": "Second free service",
+        "created": "20/03/2024",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 5230
+      },
+      {
+        "record_no": "SV-SVC-10003",
+        "category": "SVC",
+        "description": "Periodic maintenance 10,000 km",
+        "created": "18/10/2024",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 10115
+      },
+      {
+        "record_no": "SV-SVC-10004",
+        "category": "SVC",
+        "description": "Periodic maintenance 20,000 km",
+        "created": "{{today-60d}}",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 20240
+      },
+      {
+        "record_no": "SV-PUC-10005",
+        "category": "PUC",
+        "description": "Pollution Under Control certificate",
+        "created": "{{today-60d}}",
+        "expiry": "{{today+120d}}",
+        "workshop": "Koramangala",
+        "odometer_km": 0
+      }
+    ]
+  },
+  "MA3EWB81S00100003": {
+    "records": [
+      {
+        "record_no": "SV-JC-30001",
+        "category": "JC",
+        "description": "Accident repair - front bumper",
+        "created": "02/02/2025",
+        "expiry": null,
+        "workshop": "Whitefield",
+        "odometer_km": 18200
+      },
+      {
+        "record_no": "SV-SVC-30002",
+        "category": "SVC",
+        "description": "Periodic maintenance 20,000 km",
+        "created": "11/04/2025",
+        "expiry": null,
+        "workshop": "Whitefield",
+        "odometer_km": 20050
+      },
+      {
+        "record_no": "SV-PUC-30003",
+        "category": "PUC",
+        "description": "Pollution Under Control certificate",
+        "created": "{{today-30d}}",
+        "expiry": "{{today+150d}}",
+        "workshop": "Whitefield",
+        "odometer_km": 0
+      },
+      {
+        "record_no": "SV-WTY_CLAIM-30004",
+        "category": "WTY_CLAIM",
+        "description": "Warranty claim - AC compressor",
+        "created": "05/06/2025",
+        "expiry": null,
+        "workshop": "Whitefield",
+        "odometer_km": 21900
+      }
+    ]
+  },
+  "MA3EWB81S00100005": {
+    "records": [
+      {
+        "record_no": "SV-PUC-50001",
+        "category": "PUC",
+        "description": "Pollution Under Control certificate",
+        "created": "{{today-170d}}",
+        "expiry": "{{today+10d}}",
+        "workshop": "Koramangala",
+        "odometer_km": 0
+      },
+      {
+        "record_no": "SV-JC-50002",
+        "category": "JC",
+        "description": "Brake pad replacement",
+        "created": "{{today-90d}}",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 41200
+      }
+    ]
+  },
+  "MA3EWB81S00100006": {
+    "records": [
+      {
+        "record_no": "SV-INV-BLR/24/0311",
+        "category": "INV",
+        "description": "Sales invoice copy (accessories fitment)",
+        "created": "11/02/2024",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 0
+      },
+      {
+        "record_no": "SV-JC-88213",
+        "category": "JC",
+        "description": "First free service",
+        "created": "15/05/2024",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 1012
+      }
+    ]
+  },
+  "MA3EWB81S00100007": {
+    "records": [
+      {
+        "record_no": "SV-WTY_CLAIM-WTY-7007",
+        "category": "WTY_CLAIM",
+        "description": "Warranty registration",
+        "created": "11/02/2024",
+        "expiry": "11/02/2028",
+        "workshop": "Koramangala",
+        "odometer_km": 0
+      },
+      {
+        "record_no": "SV-JC-70002",
+        "category": "JC",
+        "description": "First free service",
+        "created": "20/05/2024",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 980
+      }
+    ]
+  },
+  "MA3EWB81S00100008": {
+    "records": [
+      {
+        "record_no": "SV-JC-80001",
+        "category": "JC",
+        "description": "Service visit #1",
+        "created": "06/03/2021",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 2500
+      },
+      {
+        "record_no": "SV-JC-80002",
+        "category": "JC",
+        "description": "Service visit #2",
+        "created": "30/04/2021",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 5000
+      },
+      {
+        "record_no": "SV-SVC-80003",
+        "category": "SVC",
+        "description": "Service visit #3",
+        "created": "24/06/2021",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 7500
+      },
+      {
+        "record_no": "SV-JC-80004",
+        "category": "JC",
+        "description": "Service visit #4",
+        "created": "18/08/2021",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 10000
+      },
+      {
+        "record_no": "SV-JC-80005",
+        "category": "JC",
+        "description": "Service visit #5",
+        "created": "12/10/2021",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 12500
+      },
+      {
+        "record_no": "SV-SVC-80006",
+        "category": "SVC",
+        "description": "Service visit #6",
+        "created": "06/12/2021",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 15000
+      },
+      {
+        "record_no": "SV-JC-80007",
+        "category": "JC",
+        "description": "Service visit #7",
+        "created": "30/01/2022",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 17500
+      },
+      {
+        "record_no": "SV-JC-80008",
+        "category": "JC",
+        "description": "Service visit #8",
+        "created": "26/03/2022",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 20000
+      },
+      {
+        "record_no": "SV-SVC-80009",
+        "category": "SVC",
+        "description": "Service visit #9",
+        "created": "20/05/2022",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 22500
+      },
+      {
+        "record_no": "SV-JC-80010",
+        "category": "JC",
+        "description": "Service visit #10",
+        "created": "14/07/2022",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 25000
+      },
+      {
+        "record_no": "SV-JC-80011",
+        "category": "JC",
+        "description": "Service visit #11",
+        "created": "07/09/2022",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 27500
+      },
+      {
+        "record_no": "SV-SVC-80012",
+        "category": "SVC",
+        "description": "Service visit #12",
+        "created": "01/11/2022",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 30000
+      },
+      {
+        "record_no": "SV-JC-80013",
+        "category": "JC",
+        "description": "Service visit #13",
+        "created": "26/12/2022",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 32500
+      },
+      {
+        "record_no": "SV-JC-80014",
+        "category": "JC",
+        "description": "Service visit #14",
+        "created": "19/02/2023",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 35000
+      },
+      {
+        "record_no": "SV-SVC-80015",
+        "category": "SVC",
+        "description": "Service visit #15",
+        "created": "15/04/2023",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 37500
+      },
+      {
+        "record_no": "SV-JC-80016",
+        "category": "JC",
+        "description": "Service visit #16",
+        "created": "09/06/2023",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 40000
+      },
+      {
+        "record_no": "SV-JC-80017",
+        "category": "JC",
+        "description": "Service visit #17",
+        "created": "03/08/2023",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 42500
+      },
+      {
+        "record_no": "SV-SVC-80018",
+        "category": "SVC",
+        "description": "Service visit #18",
+        "created": "27/09/2023",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 45000
+      },
+      {
+        "record_no": "SV-JC-80019",
+        "category": "JC",
+        "description": "Service visit #19",
+        "created": "21/11/2023",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 47500
+      },
+      {
+        "record_no": "SV-JC-80020",
+        "category": "JC",
+        "description": "Service visit #20",
+        "created": "15/01/2024",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 50000
+      },
+      {
+        "record_no": "SV-SVC-80021",
+        "category": "SVC",
+        "description": "Service visit #21",
+        "created": "10/03/2024",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 52500
+      },
+      {
+        "record_no": "SV-JC-80022",
+        "category": "JC",
+        "description": "Service visit #22",
+        "created": "04/05/2024",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 55000
+      },
+      {
+        "record_no": "SV-JC-80023",
+        "category": "JC",
+        "description": "Service visit #23",
+        "created": "28/06/2024",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 57500
+      },
+      {
+        "record_no": "SV-SVC-80024",
+        "category": "SVC",
+        "description": "Service visit #24",
+        "created": "22/08/2024",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 60000
+      },
+      {
+        "record_no": "SV-JC-80025",
+        "category": "JC",
+        "description": "Service visit #25",
+        "created": "16/10/2024",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 62500
+      },
+      {
+        "record_no": "SV-JC-80026",
+        "category": "JC",
+        "description": "Service visit #26",
+        "created": "10/12/2024",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 65000
+      },
+      {
+        "record_no": "SV-SVC-80027",
+        "category": "SVC",
+        "description": "Service visit #27",
+        "created": "03/02/2025",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 67500
+      },
+      {
+        "record_no": "SV-JC-80028",
+        "category": "JC",
+        "description": "Service visit #28",
+        "created": "30/03/2025",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 70000
+      },
+      {
+        "record_no": "SV-JC-80029",
+        "category": "JC",
+        "description": "Service visit #29",
+        "created": "24/05/2025",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 72500
+      },
+      {
+        "record_no": "SV-SVC-80030",
+        "category": "SVC",
+        "description": "Service visit #30",
+        "created": "18/07/2025",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 75000
+      }
+    ]
+  },
+  "MA3EWB81S00100009": {
+    "records": [
+      {
+        "record_no": "SV-JC-90001",
+        "category": "JC",
+        "description": "First free service",
+        "created": "12/12/2023",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 1100
+      },
+      {
+        "record_no": "SV-JC-90002",
+        "category": "JC",
+        "description": "Corrupted record from legacy import",
+        "created": "31/02/2024",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 3000
+      },
+      {
+        "record_no": "SV-SVC-90003",
+        "category": "SVC",
+        "description": "Periodic maintenance 10,000 km",
+        "created": "14/09/2024",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 10020
+      }
+    ]
+  },
+  "MA3EWB81S00100010": {
+    "records": [
+      {
+        "record_no": "SV-JC-A0001",
+        "category": "JC",
+        "description": "Pre-delivery inspection",
+        "created": "15/01/2025",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 0
+      },
+      {
+        "record_no": "SV-JC-A0002",
+        "category": "JC",
+        "description": "Accessory fitment",
+        "created": "15/01/2025",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 0
+      },
+      {
+        "record_no": "SV-SVC-A0003",
+        "category": "SVC",
+        "description": "Periodic maintenance 10,000 km",
+        "created": "20/10/2025",
+        "expiry": null,
+        "workshop": "Koramangala",
+        "odometer_km": 10010
+      }
+    ]
+  }
+}
