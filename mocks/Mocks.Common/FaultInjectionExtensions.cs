@@ -1,17 +1,30 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Json;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Mocks.Common;
 
 public static class FaultInjectionExtensions
 {
+    /// <summary>Lets the demo UI's health panel flip the fault switch from the browser (D5.2). Admin endpoints only.</summary>
+    public const string AdminCorsPolicy = "fault-admin";
+
+    private static readonly string[] DefaultUiOrigins = ["http://localhost:5173"];
+
     public static IServiceCollection AddFaultInjection(this IServiceCollection services)
     {
         services.AddSingleton<FaultState>();
+        services.AddCors();
+        services.AddOptions<CorsOptions>().Configure<IConfiguration>((cors, config) =>
+        {
+            var origins = config.GetSection("Cors:AllowedOrigins").Get<string[]>() is { Length: > 0 } configured ? configured : DefaultUiOrigins;
+            cors.AddPolicy(AdminCorsPolicy, p => p.WithOrigins(origins).WithMethods("GET", "POST").WithHeaders("Content-Type"));
+        });
         services.Configure<JsonOptions>(o =>
             o.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
         return services;
@@ -22,11 +35,13 @@ public static class FaultInjectionExtensions
     {
         ArgumentNullException.ThrowIfNull(app);
 
+        app.UseCors();
         app.UseMiddleware<FaultInjectionMiddleware>();
 
-        app.MapGet("/__admin/fault", (FaultState state) => state.Current);
+        var admin = app.MapGroup("/__admin").RequireCors(AdminCorsPolicy);
+        admin.MapGet("/fault", (FaultState state) => state.Current);
 
-        app.MapPost("/__admin/fault", (FaultSettings settings, FaultState state) =>
+        admin.MapPost("/fault", (FaultSettings settings, FaultState state) =>
         {
             if (settings.Validate() is { } error)
             {

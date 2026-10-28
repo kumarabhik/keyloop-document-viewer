@@ -1,0 +1,21 @@
+<section class="panel panel--empty" data-state="@(Filtered ? "no-match" : "empty")">
+    @if (Filtered)
+    {
+        <h2>No documents match these filters</h2>
+        <button type="button" class="btn btn--link" @onclick="OnClearFilters">Clear filters</button>
+    }
+    else
+    {
+        <h2>No documents for this vehicle</h2>
+        <p>Both systems answered, and neither holds any documents for this VIN. Check the VIN; the vehicle may also be new to this dealership.</p>
+    }
+</section>
+
+@code {
+    /// <summary>True when the vehicle has documents but the current filters hide all of them.</summary>
+    [Parameter]
+    public bool Filtered { get; set; }
+
+    [Parameter]
+    public EventCallback OnClearFilters { get; set; }
+}

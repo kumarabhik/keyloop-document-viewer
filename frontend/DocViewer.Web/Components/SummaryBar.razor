@@ -1,0 +1,33 @@
+<div class="summary" data-summary>
+    <span class="summary__item"><strong>@Summary.Total</strong> @(Summary.Total == 1 ? "document" : "documents")</span>
+    @foreach (var source in Sources)
+    {
+        <span class="summary__item"><SourceBadge Source="@source.Name" /> @source.Count</span>
+    }
+    @if (Summary.Duplicates > 0)
+    {
+        <span class="summary__item">@Format.Plural(Summary.Duplicates, "possible duplicate")</span>
+    }
+    @if (Summary.Conflicts > 0)
+    {
+        <span class="summary__item summary__item--warn">@Format.Plural(Summary.Conflicts, "conflict")</span>
+    }
+    <span class="summary__meta">@(Cache == "HIT" ? "From cache · " : "")generated @Format.Timestamp(GeneratedAt, Time)</span>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public DocumentSummary Summary { get; set; } = new(0, 0, 0, 0, 0);
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<SourceStatusResponse> Sources { get; set; } = [];
+
+    [Parameter]
+    public string Cache { get; set; } = "";
+
+    [Parameter]
+    public DateTimeOffset GeneratedAt { get; set; }
+
+    [Inject]
+    private TimeProvider Time { get; set; } = TimeProvider.System;
+}

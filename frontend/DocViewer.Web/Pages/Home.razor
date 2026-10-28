@@ -1,0 +1,179 @@
+@page "/"
+@implements IDisposable
+@inject DocumentsApiClient Api
+@inject NavigationManager Navigation
+@inject RecentSearches RecentStore
+@inject TimeProvider Time
+
+<PageTitle>@(_vin is null ? "Vehicle documents" : $"{_vin.Value} · Vehicle documents")</PageTitle>
+
+<header class="intro">
+    <h1>Vehicle documents</h1>
+    <p>One search across the dealership's Sales and Service systems. Every document shows where it came from.</p>
+</header>
+
+<VinSearchBox @bind-Value="_input" OnSearch="SearchAsync" Recent="_recent" Busy="_loading"
+              ServerError="@((_outcome as SearchOutcome.Rejected)?.Problem.Detail)" />
+
+@if (_loading)
+{
+    <LoadingSkeleton />
+}
+else
+{
+    switch (_outcome)
+    {
+        case SearchOutcome.Found { Response: var response }:
+            var shown = Filter.Apply(response.Documents);
+            <section class="results-section" data-state="@(response.Partial ? "partial" : "complete")">
+                <div class="results-section__head">
+                    <h2>@response.Vin</h2>
+                    <button type="button" class="btn btn--link" @onclick="() => RunAsync(refresh: true)" title="Ask both systems again, skipping the 60-second cache">Refresh</button>
+                </div>
+                <SourceBanners Sources="response.Sources" />
+                <SummaryBar Summary="response.Summary" Sources="response.Sources" Cache="@response.Cache" GeneratedAt="response.GeneratedAt" />
+                <ExpiryAlert Documents="response.Documents" Today="Today" OnShowStatus="ShowStatusAsync" />
+
+                @if (response.Documents.Count == 0)
+                {
+                    <EmptyState />
+                }
+                else
+                {
+                    <FilterBar Filter="Filter" FilterChanged="ApplyFilterAsync" />
+                    @if (shown.Count == 0)
+                    {
+                        <EmptyState Filtered="true" OnClearFilters="() => ApplyFilterAsync(DocumentFilter.None)" />
+                    }
+                    else
+                    {
+                        @if (!Filter.IsEmpty)
+                        {
+                            <p class="results-section__count" data-count>Showing @shown.Count of @response.Documents.Count</p>
+                        }
+                        <ResultsTable Documents="shown" Today="Today" />
+                    }
+                }
+                <TraceReference TraceId="@response.TraceId" />
+            </section>
+            break;
+        case SearchOutcome.Rejected { Problem: var problem }:
+            <TraceReference TraceId="@problem.TraceId" />
+            break;
+        case SearchOutcome.Unavailable { Problem: var problem, RetryAfter: var retryAfter }:
+            <UnavailablePanel Problem="problem" RetryAfter="retryAfter" OnRetry="() => RunAsync(refresh: false)" />
+            break;
+        case SearchOutcome.Failed { Message: var message, TraceId: var traceId }:
+            <FailedPanel Message="@message" TraceId="@traceId" OnRetry="() => RunAsync(refresh: false)" />
+            break;
+    }
+}
+
+<SourceHealthPanel RefreshKey="_searches" />
+
+@code {
+    private CancellationTokenSource? _search;
+    private string _input = "";
+    private Vin? _vin;
+    private SearchOutcome? _outcome;
+    private bool _loading;
+    private int _searches;
+    private IReadOnlyList<string> _recent = [];
+
+    /// <summary>Deep link: <c>/?vin=MA3EWB81S00100001</c> searches on load (D4.2).</summary>
+    [SupplyParameterFromQuery(Name = "vin")]
+    public string? VinQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "source")]
+    public string? SourceQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "type")]
+    public string? TypeQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "status")]
+    public string? StatusQuery { get; set; }
+
+    private DocumentFilter Filter => DocumentFilter.FromQuery(SourceQuery, TypeQuery, StatusQuery);
+
+    private DateOnly Today => Format.Today(Time);
+
+    protected override async Task OnInitializedAsync() => _recent = await RecentStore.GetAsync();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Filter changes only rewrite the query string; search again only when the VIN itself changes.
+        if (VinQuery is null || (_vin is not null && string.Equals(VinQuery, _vin.Value, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        _input = VinQuery.Trim().ToUpperInvariant();
+        if (Vin.TryParse(VinQuery, out var vin, out _))
+        {
+            _vin = vin;
+            await RunAsync(refresh: false);
+        }
+    }
+
+    private async Task SearchAsync(Vin vin)
+    {
+        if (_vin == vin)
+        {
+            await RunAsync(refresh: false); // same VIN again: the URL does not change, so search directly
+            return;
+        }
+
+        // A new VIN clears the filters; OnParametersSetAsync runs the search from the new URL.
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameters(new Dictionary<string, object?>(DocumentFilter.None.ToQuery()) { ["vin"] = vin.Value }));
+    }
+
+    private async Task RunAsync(bool refresh)
+    {
+        if (_vin is null)
+        {
+            return;
+        }
+
+        _search?.Cancel();
+        _search?.Dispose();
+        var search = _search = new CancellationTokenSource();
+
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            _outcome = await Api.SearchAsync(_vin, refresh, search.Token);
+            if (_outcome is SearchOutcome.Found)
+            {
+                _recent = await RecentStore.AddAsync(_vin);
+            }
+        }
+        catch (OperationCanceledException) when (search.IsCancellationRequested)
+        {
+            return; // a newer search replaced this one
+        }
+        finally
+        {
+            if (ReferenceEquals(search, _search))
+            {
+                _loading = false;
+            }
+        }
+
+        _searches++;
+    }
+
+    private Task ApplyFilterAsync(DocumentFilter filter)
+    {
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameters(filter.ToQuery()), replace: true);
+        return Task.CompletedTask;
+    }
+
+    private Task ShowStatusAsync(string status) => ApplyFilterAsync(DocumentFilter.None with { Status = status });
+
+    public void Dispose()
+    {
+        _search?.Cancel();
+        _search?.Dispose();
+    }
+}

@@ -1,0 +1,29 @@
+@* Partial and stale warnings, one per source that is not ok (DESIGN.md §9.5). *@
+@foreach (var source in Sources.Where(s => !s.IsOk))
+{
+    var problem = Format.SourceProblem(source.Status, source.Error);
+    if (source.IsStale && source.AsOf is { } asOf)
+    {
+        <div class="banner banner--stale" role="status" data-banner="stale" data-source="@source.Name">
+            <strong>@Format.SourceName(source.Name) @problem.</strong>
+            Showing its last saved copy from <time>@Format.Timestamp(asOf, Time)</time>; it may be out of date.
+        </div>
+    }
+    else
+    {
+        <div class="banner banner--partial" role="alert" data-banner="partial" data-source="@source.Name">
+            <strong>@Format.SourceName(source.Name) @problem.</strong>
+            @(OkNames.Length > 0 ? $"Results below are from the {string.Join(" and ", OkNames)} only." : "Its documents are missing below.")
+        </div>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<SourceStatusResponse> Sources { get; set; } = [];
+
+    [Inject]
+    private TimeProvider Time { get; set; } = TimeProvider.System;
+
+    private string[] OkNames => Sources.Where(s => s.IsOk).Select(s => Format.SourceName(s.Name)).ToArray();
+}

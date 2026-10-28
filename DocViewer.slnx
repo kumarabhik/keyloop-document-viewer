@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/frontend/">
+    <Project Path="frontend/DocViewer.Web/DocViewer.Web.csproj" />
+  </Folder>
   <Folder Name="/mocks/">
     <Project Path="mocks/Mocks.Common/Mocks.Common.csproj" />
     <Project Path="mocks/SalesSystem.Mock/SalesSystem.Mock.csproj" />
@@ -15,6 +18,7 @@
     <Project Path="tests/DocViewer.Application.Tests/DocViewer.Application.Tests.csproj" />
     <Project Path="tests/DocViewer.Domain.Tests/DocViewer.Domain.Tests.csproj" />
     <Project Path="tests/DocViewer.Infrastructure.Tests/DocViewer.Infrastructure.Tests.csproj" />
+    <Project Path="tests/DocViewer.Web.Tests/DocViewer.Web.Tests.csproj" />
     <Project Path="tests/Mocks.Tests/Mocks.Tests.csproj" />
   </Folder>
 </Solution>

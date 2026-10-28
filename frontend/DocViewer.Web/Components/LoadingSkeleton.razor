@@ -1,0 +1,12 @@
+<div class="skeleton" aria-busy="true" aria-label="Searching both systems" data-state="loading">
+    <div class="skeleton__bar skeleton__bar--short"></div>
+    @for (var i = 0; i < 5; i++)
+    {
+        <div class="skeleton__row">
+            <div class="skeleton__bar skeleton__bar--badge"></div>
+            <div class="skeleton__bar"></div>
+            <div class="skeleton__bar skeleton__bar--short"></div>
+        </div>
+    }
+    <p class="skeleton__text">Asking the Sales and Service systems…</p>
+</div>

@@ -1,0 +1,89 @@
+@* D4.2: live format hints from the same Vin.TryParse the API uses, so the UI and the server never disagree. *@
+<form class="search" @onsubmit="SubmitAsync" data-search>
+    <label class="search__label" for="vin-input">Vehicle Identification Number (VIN)</label>
+    <div class="search__row">
+        <input id="vin-input" class="search__input @InputClass" value="@Value" @oninput="OnInputAsync"
+               maxlength="25" autocomplete="off" spellcheck="false" placeholder="e.g. MA3EWB81S00100001"
+               aria-describedby="vin-hint" aria-invalid="@(ShowError ? "true" : "false")" />
+        <button type="submit" class="btn btn--primary" disabled="@(!IsValid || Busy)">@(Busy ? "Searching…" : "Search")</button>
+    </div>
+    <p id="vin-hint" class="search__hint @HintClass" data-hint>@HintText</p>
+
+    @if (Recent.Count > 0)
+    {
+        <div class="recent" data-recent>
+            <span class="recent__label">Recent:</span>
+            @foreach (var vin in Recent)
+            {
+                <button type="button" class="chip-button" @onclick="() => PickAsync(vin)">@vin</button>
+            }
+        </div>
+    }
+</form>
+
+@code {
+    [Parameter]
+    public string Value { get; set; } = "";
+
+    [Parameter]
+    public EventCallback<string> ValueChanged { get; set; }
+
+    [Parameter, EditorRequired]
+    public EventCallback<Vin> OnSearch { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<string> Recent { get; set; } = [];
+
+    [Parameter]
+    public bool Busy { get; set; }
+
+    /// <summary>The API's 400 detail, shown in place of the local hint.</summary>
+    [Parameter]
+    public string? ServerError { get; set; }
+
+    private bool IsValid => Vin.TryParse(Value, out _, out _);
+
+    private bool ShowError => ServerError is not null || (!string.IsNullOrWhiteSpace(Value) && !IsValid);
+
+    private string InputClass => ShowError ? "search__input--invalid" : IsValid ? "search__input--valid" : "";
+
+    private string HintClass => ShowError ? "search__hint--error" : IsValid ? "search__hint--ok" : "";
+
+    private string HintText
+    {
+        get
+        {
+            if (ServerError is not null)
+            {
+                return ServerError;
+            }
+
+            if (string.IsNullOrWhiteSpace(Value))
+            {
+                return "17 characters: letters A–Z and digits 0–9, without I, O or Q.";
+            }
+
+            return Vin.TryParse(Value, out var vin, out var error) ? $"✓ Valid VIN · will search {vin.Value}" : error;
+        }
+    }
+
+    // Upper-case as the user types: VINs are case-insensitive and are always shown in capitals.
+    private Task OnInputAsync(ChangeEventArgs e) => ValueChanged.InvokeAsync((e.Value?.ToString() ?? "").ToUpperInvariant());
+
+    private async Task SubmitAsync()
+    {
+        if (!Busy && Vin.TryParse(Value, out var vin, out _))
+        {
+            await OnSearch.InvokeAsync(vin);
+        }
+    }
+
+    private async Task PickAsync(string value)
+    {
+        await ValueChanged.InvokeAsync(value);
+        if (Vin.TryParse(value, out var vin, out _))
+        {
+            await OnSearch.InvokeAsync(vin);
+        }
+    }
+}

@@ -72,5 +72,5 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Build API and mock images
-        run: docker compose build api sales-mock service-mock
+      - name: Build API, mock and UI images
+        run: docker compose build api sales-mock service-mock web

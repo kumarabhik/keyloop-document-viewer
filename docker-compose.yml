@@ -1,4 +1,4 @@
-# docker compose up --build                 → API :8080, Sales mock :8081, Service mock :8082, Postgres, Redis
+# docker compose up --build                 → API :8080, Sales mock :8081, Service mock :8082, UI :5173, Postgres, Redis
 # docker compose --profile obs up --build   → + Prometheus :9090, Grafana :3000, Jaeger :16686
 # Every variable has a working default, so a clean clone runs without a .env file (see .env.example).
 name: docviewer
@@ -30,6 +30,13 @@ services:
       # Traces go to Jaeger when the obs profile runs; without it the exporter fails silently.
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4317}
       OTEL_SERVICE_NAME: docviewer-api
+    # The chiselled image has no curl, so the API probes itself: exit 0 when /readyz answers 2xx (D-023).
+    healthcheck:
+      test: ["CMD", "dotnet", "DocViewer.Api.dll", "--healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -55,6 +62,16 @@ services:
       args:
         PROJECT: mocks/ServiceSystem.Mock/ServiceSystem.Mock.csproj
     ports: ["8082:8080"]
+
+  # Demo client (D-025): static Blazor WebAssembly files; the browser calls the API on :8080 and the mocks' fault switches.
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: web
+    restart: unless-stopped
+    ports: ["5173:80"]
+    depends_on: [api]
 
   postgres:
     image: postgres:16-alpine

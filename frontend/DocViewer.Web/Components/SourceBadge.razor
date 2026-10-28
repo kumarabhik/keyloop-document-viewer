@@ -1,0 +1,7 @@
+@* Colour-coded source of a document (brief R3: the source is shown on every document). *@
+<span class="badge @(Source == WireValues.Sales ? "badge--sales" : "badge--service")" data-source="@Source">@WireValues.Label(Source)</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Source { get; set; } = "";
+}

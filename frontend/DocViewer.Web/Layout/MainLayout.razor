@@ -1,0 +1,19 @@
+﻿@inherits LayoutComponentBase
+@inject Microsoft.Extensions.Options.IOptions<ApiOptions> Options
+
+<div class="shell">
+    <nav class="topbar">
+        <span class="topbar__brand">Unified Document Viewer</span>
+        @if (Options.Value.UseMocks)
+        {
+            <span class="topbar__mode" data-mock-mode title="Responses come from the built-in mock handler; no backend is called.">Mock mode</span>
+        }
+        else
+        {
+            <span class="topbar__api">API: @Options.Value.BaseUrl</span>
+        }
+    </nav>
+    <main class="content">
+        @Body
+    </main>
+</div>

@@ -1,0 +1,10 @@
+@* D4.4: the id support needs to find this request in logs and Jaeger (same value as the X-Trace-Id header). *@
+@if (!string.IsNullOrEmpty(TraceId))
+{
+    <p class="trace" data-trace>Support reference (trace id): <code>@TraceId</code></p>
+}
+
+@code {
+    [Parameter]
+    public string? TraceId { get; set; }
+}

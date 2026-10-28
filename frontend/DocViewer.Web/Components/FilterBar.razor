@@ -1,0 +1,49 @@
+@* D5.3: filters by source, type and status; the page mirrors them in the URL. *@
+<div class="filters" data-filters>
+    <label>
+        Source
+        <select data-filter="source" value="@(Filter.Source ?? "")" @onchange="e => ChangeAsync(Filter with { Source = Pick(e) })">
+            <option value="">All sources</option>
+            @foreach (var source in WireValues.SourceNames)
+            {
+                <option value="@source">@WireValues.Label(source)</option>
+            }
+        </select>
+    </label>
+    <label>
+        Type
+        <select data-filter="type" value="@(Filter.Type ?? "")" @onchange="e => ChangeAsync(Filter with { Type = Pick(e) })">
+            <option value="">All types</option>
+            @foreach (var type in WireValues.DocumentTypes)
+            {
+                <option value="@type">@WireValues.Label(type)</option>
+            }
+        </select>
+    </label>
+    <label>
+        Status
+        <select data-filter="status" value="@(Filter.Status ?? "")" @onchange="e => ChangeAsync(Filter with { Status = Pick(e) })">
+            <option value="">All statuses</option>
+            @foreach (var status in WireValues.DocumentStatuses)
+            {
+                <option value="@status">@WireValues.Label(status)</option>
+            }
+        </select>
+    </label>
+    @if (!Filter.IsEmpty)
+    {
+        <button type="button" class="btn btn--link" data-filter="clear" @onclick="() => ChangeAsync(DocumentFilter.None)">Clear filters</button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public DocumentFilter Filter { get; set; } = DocumentFilter.None;
+
+    [Parameter]
+    public EventCallback<DocumentFilter> FilterChanged { get; set; }
+
+    private static string? Pick(ChangeEventArgs e) => e.Value?.ToString() is { Length: > 0 } v ? v : null;
+
+    private Task ChangeAsync(DocumentFilter filter) => FilterChanged.InvokeAsync(filter);
+}

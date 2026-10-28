@@ -1,0 +1,18 @@
+@* Duplicates and conflicts are flagged, never merged (D-009): both records stay visible. *@
+@foreach (var flag in Flags)
+{
+    @switch (flag)
+    {
+        case WireValues.Conflict:
+            <span class="flag flag--conflict" data-flag="@flag" title="Both systems have this document but disagree about its dates. Check the originals.">⚠ Conflict</span>
+            break;
+        case WireValues.PossibleDuplicate:
+            <span class="flag flag--duplicate" data-flag="@flag" title="The same document appears to exist in both systems.">⧉ Possible duplicate</span>
+            break;
+    }
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<string> Flags { get; set; } = [];
+}

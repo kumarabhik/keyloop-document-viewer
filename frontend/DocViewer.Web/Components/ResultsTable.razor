@@ -1,0 +1,41 @@
+@* D4.3: one merged list; every row shows which system it came from. *@
+<div class="table-wrap">
+    <table class="results" data-results>
+        <thead>
+            <tr>
+                <th scope="col">Source</th>
+                <th scope="col">Type</th>
+                <th scope="col">Document</th>
+                <th scope="col">Date</th>
+                <th scope="col">Expiry</th>
+                <th scope="col">Status</th>
+                <th scope="col">Notes</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var doc in Documents)
+            {
+                <tr data-document="@doc.Id">
+                    <td><SourceBadge Source="@doc.Source" /></td>
+                    <td>@WireValues.Label(doc.Type)</td>
+                    <td>
+                        <div class="results__title">@doc.Title</div>
+                        <div class="results__ref">@doc.SourceId</div>
+                    </td>
+                    <td class="results__date">@Format.Date(doc.Date)</td>
+                    <td class="results__date">@Format.Date(doc.ExpiryDate)</td>
+                    <td><StatusChip Status="@doc.Status" ExpiryDate="@doc.ExpiryDate" Today="@Today" /></td>
+                    <td><FlagIcons Flags="@doc.Flags" /></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<DocumentResponse> Documents { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public DateOnly Today { get; set; }
+}

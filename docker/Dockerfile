@@ -28,3 +28,16 @@ ENTRYPOINT ["dotnet", "SalesSystem.Mock.dll"]
 
 FROM runtime AS service-mock
 ENTRYPOINT ["dotnet", "ServiceSystem.Mock.dll"]
+
+# --- Demo UI (D-025): Blazor WebAssembly is static files after publish, so nginx serves it. -----------------
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS web-build
+WORKDIR /repo
+COPY global.json Directory.Build.props Directory.Packages.props .editorconfig ./
+COPY src/DocViewer.Domain/ src/DocViewer.Domain/
+COPY frontend/DocViewer.Web/ frontend/DocViewer.Web/
+RUN dotnet publish frontend/DocViewer.Web/DocViewer.Web.csproj -c Release -o /web
+
+FROM nginx:1.29-alpine AS web
+COPY docker/nginx-web.conf /etc/nginx/conf.d/default.conf
+COPY --from=web-build /web/wwwroot /usr/share/nginx/html
+EXPOSE 80

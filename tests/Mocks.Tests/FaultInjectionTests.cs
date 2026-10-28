@@ -30,6 +30,36 @@ public sealed class FaultInjectionTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
+    [Theory]
+    [InlineData("http://localhost:5173", true)]
+    [InlineData("http://evil.example", false)]
+    public async Task AdminPreflight_AllowsOnlyTheDemoUiOrigin(string origin, bool allowed)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Options, FaultUri);
+        request.Headers.Add("Origin", origin);
+        request.Headers.Add("Access-Control-Request-Method", "POST");
+        request.Headers.Add("Access-Control-Request-Headers", "content-type");
+
+        var response = await _client.SendAsync(request);
+
+        response.Headers.TryGetValues("Access-Control-Allow-Origin", out var values).ShouldBe(allowed);
+        if (allowed)
+        {
+            values!.ShouldBe([origin]);
+        }
+    }
+
+    [Fact]
+    public async Task DocumentEndpoint_HasNoCorsHeaders()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, DocumentsUri);
+        request.Headers.Add("Origin", "http://localhost:5173");
+
+        var response = await _client.SendAsync(request);
+
+        response.Headers.Contains("Access-Control-Allow-Origin").ShouldBeFalse();
+    }
+
     [Fact]
     public async Task Default_IsHealthy()
     {

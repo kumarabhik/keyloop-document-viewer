@@ -1,0 +1,28 @@
+@switch (Status)
+{
+    case WireValues.Expired:
+        <span class="chip chip--expired" data-status="@Status">Expired@(Detail)</span>
+        break;
+    case WireValues.ExpiringSoon:
+        <span class="chip chip--expiring" data-status="@Status">Expiring soon@(Detail)</span>
+        break;
+    case WireValues.Valid:
+        <span class="chip chip--valid" data-status="@Status">Valid</span>
+        break;
+    default:
+        <span class="chip chip--none" data-status="@Status" title="This document has no expiry date">No expiry</span>
+        break;
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public string Status { get; set; } = "";
+
+    [Parameter]
+    public DateOnly? ExpiryDate { get; set; }
+
+    [Parameter, EditorRequired]
+    public DateOnly Today { get; set; }
+
+    private string Detail => ExpiryDate is { } e ? $" · {Format.Expiry(e, Today)}" : "";
+}

@@ -1,0 +1,28 @@
+@* D4.4: 503, both systems failed and there was no saved copy to fall back on. *@
+<section class="panel panel--error" role="alert" data-state="unavailable">
+    <h2>Neither system is answering right now</h2>
+    <p>@(Problem.Detail ?? "No document source answered.")</p>
+    @if (Problem.Sources is { Count: > 0 } sources)
+    {
+        <ul class="panel__list">
+            @foreach (var source in sources)
+            {
+                <li><SourceBadge Source="@source.Name" /> @Format.SourceProblem(source.Status, source.Error)</li>
+            }
+        </ul>
+    }
+    <button type="button" class="btn btn--primary" @onclick="OnRetry">Try again</button>
+    <span class="panel__hint">Suggested wait: @Format.Plural((int)Math.Ceiling(RetryAfter.TotalSeconds), "second").</span>
+    <TraceReference TraceId="@Problem.TraceId" />
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public ProblemResponse Problem { get; set; } = new(null, null, null, null, null, null, null);
+
+    [Parameter]
+    public TimeSpan RetryAfter { get; set; }
+
+    [Parameter]
+    public EventCallback OnRetry { get; set; }
+}

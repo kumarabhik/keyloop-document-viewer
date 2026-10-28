@@ -1,0 +1,57 @@
+@* D5.1: "1 expired, 1 expiring in 10 days" over the whole vehicle, with shortcuts to filter the table. *@
+@if (_expired.Count > 0 || _expiring.Count > 0)
+{
+    <div class="alert" role="status" data-alert="expiry">
+        <span class="alert__icon" aria-hidden="true">⏰</span>
+        <span class="alert__text">@Message</span>
+        @if (_expired.Count > 0)
+        {
+            <button type="button" class="btn btn--small" @onclick="() => OnShowStatus.InvokeAsync(WireValues.Expired)">Show expired</button>
+        }
+        @if (_expiring.Count > 0)
+        {
+            <button type="button" class="btn btn--small" @onclick="() => OnShowStatus.InvokeAsync(WireValues.ExpiringSoon)">Show expiring</button>
+        }
+    </div>
+}
+
+@code {
+    private List<DocumentResponse> _expired = [];
+    private List<DocumentResponse> _expiring = [];
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<DocumentResponse> Documents { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public DateOnly Today { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnShowStatus { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        _expired = Documents.Where(d => d.Status == WireValues.Expired).ToList();
+        _expiring = Documents.Where(d => d.Status == WireValues.ExpiringSoon).OrderBy(d => d.ExpiryDate).ToList();
+    }
+
+    internal string Message
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (_expired.Count > 0)
+            {
+                parts.Add($"{_expired.Count} expired");
+            }
+
+            if (_expiring.Count > 0)
+            {
+                var days = _expiring[0].ExpiryDate!.Value.DayNumber - Today.DayNumber; // EXPIRING_SOON always has an expiry date
+                var when = days == 0 ? "today" : days == 1 ? "tomorrow" : $"in {days} days";
+                parts.Add(_expiring.Count == 1 ? $"1 expiring {when}" : $"{_expiring.Count} expiring soon (next {when})");
+            }
+
+            return string.Join(", ", parts);
+        }
+    }
+}
