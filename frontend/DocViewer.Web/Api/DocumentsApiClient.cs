@@ -39,6 +39,11 @@ internal sealed class DocumentsApiClient(HttpClient http, IOptions<ApiOptions> o
         {
             return new SearchOutcome.Failed($"Cannot reach the API at {options.Value.BaseUrl}. Is it running?", null);
         }
+        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // HttpClient.Timeout, not the caller: an expected outcome, not an exception (D5.6 review).
+            return new SearchOutcome.Failed("The API did not answer in time. Try again.", null);
+        }
         catch (JsonException)
         {
             return new SearchOutcome.Failed("The API returned a response this page could not read.", null);
@@ -53,7 +58,8 @@ internal sealed class DocumentsApiClient(HttpClient http, IOptions<ApiOptions> o
             return await http.GetFromJsonAsync(new Uri("api/v1/sources/health", UriKind.Relative),
                 WebJsonContext.Default.IReadOnlyListSourceHealthResponse, cancellationToken);
         }
-        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        catch (Exception ex) when (ex is HttpRequestException or JsonException
+                                   || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
         {
             return null;
         }
@@ -62,18 +68,34 @@ internal sealed class DocumentsApiClient(HttpClient http, IOptions<ApiOptions> o
     /// <summary>Flips a mock source system's fault mode (demo only, D5.2). True when the mock accepted it.</summary>
     public async Task<bool> SetFaultAsync(string source, string mode, CancellationToken cancellationToken)
     {
-        var baseUrl = source == WireValues.Sales ? options.Value.SalesMockUrl : options.Value.ServiceMockUrl;
         try
         {
-            using var response = await http.PostAsJsonAsync(new Uri(baseUrl, "__admin/fault"), new FaultRequest(mode),
+            using var response = await http.PostAsJsonAsync(new Uri(MockUrl(source), "__admin/fault"), new FaultRequest(mode),
                 WebJsonContext.Default.FaultRequest, cancellationToken);
             return response.IsSuccessStatusCode;
         }
-        catch (HttpRequestException)
+        catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
         {
             return false;
         }
     }
+
+    /// <summary>The mock's current fault mode, or null when it cannot be read (D5.2).</summary>
+    public async Task<string?> GetFaultAsync(string source, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var current = await http.GetFromJsonAsync(new Uri(MockUrl(source), "__admin/fault"), WebJsonContext.Default.FaultRequest, cancellationToken);
+            return current?.Mode;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException
+                                   || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
+        {
+            return null;
+        }
+    }
+
+    private Uri MockUrl(string source) => source == WireValues.Sales ? options.Value.SalesMockUrl : options.Value.ServiceMockUrl;
 
     private static async Task<ProblemResponse> ReadProblemAsync(HttpResponseMessage response, string? traceId, CancellationToken cancellationToken) =>
         await ReadAsync(response, WebJsonContext.Default.ProblemResponse, cancellationToken)

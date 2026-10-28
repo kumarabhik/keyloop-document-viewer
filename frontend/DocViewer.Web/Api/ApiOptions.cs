@@ -21,4 +21,13 @@ internal sealed class ApiOptions
     public Uri SalesMockUrl { get; set; } = new("http://localhost:8081");
 
     public Uri ServiceMockUrl { get; set; } = new("http://localhost:8082");
+
+    /// <summary>
+    /// The API decides EXPIRED / EXPIRING_SOON in the dealership's zone (BusinessRules:TimeZone, A10); "expires in N days"
+    /// must count from the same "today", not from the viewer's browser zone (D5.6 review).
+    /// </summary>
+    [Required]
+    public string DealershipTimeZone { get; set; } = "Asia/Kolkata";
+
+    public TimeZoneInfo DealershipZone => TimeZoneInfo.FindSystemTimeZoneById(DealershipTimeZone);
 }

@@ -195,6 +195,47 @@ public sealed class HomePageTests : IDisposable
         cut.WaitForAssertion(() => cut.Find("[data-health-source='SERVICE'] .circuit").TextContent.ShouldContain("Open"));
     }
 
+    [Fact]
+    public void CircuitOpen_BannerSaysTheSystemIsPaused()
+    {
+        var cut = WaitForState(Open($"?vin={Vins.CircuitOpen}"), "partial");
+
+        cut.Find("[data-banner='partial']").TextContent.ShouldContain("Service system is paused after repeated failures");
+    }
+
+    [Fact]
+    public void RepeatSearch_IsServedFromCache()
+    {
+        var cut = WaitForState(Open($"?vin={Vins.Complete}"), "complete");
+        cut.Find("[data-summary]").TextContent.ShouldNotContain("From cache");
+
+        cut.Find("form").Submit(); // same VIN again
+        cut.WaitForAssertion(() => cut.Find("[data-summary]").TextContent.ShouldContain("From cache"));
+    }
+
+    [Fact]
+    public async Task HealthPanel_ShowsTheModeTheMockReallyHas_AndHalfOpenAfterHealing()
+    {
+        var api = _ctx.Services.GetRequiredService<DocumentsApiClient>();
+        (await api.SetFaultAsync(WireValues.Service, "error", CancellationToken.None)).ShouldBeTrue(); // e.g. set by k6 or curl
+
+        var cut = WaitForState(Open($"?vin={Vins.Complete}"), "partial");
+        cut.WaitForAssertion(() => cut.Find("[data-fault='SERVICE']").GetAttribute("value").ShouldBe("error"));
+
+        cut.Find("[data-fault='SERVICE']").Change("none");
+        cut.WaitForAssertion(() => cut.Find("[data-health-source='SERVICE'] .circuit").TextContent.ShouldContain("Half-open"));
+    }
+
+    [Fact]
+    public void ExpiryDays_CountFromTheDealershipsToday_NotTheBrowsers()
+    {
+        // 20:00 UTC on 28 Oct is already 01:30 on 29 Oct in Kolkata, where the API decides expiry.
+        var today = Web.Components.Format.Today(new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(2026, 10, 28, 20, 0, 0, TimeSpan.Zero)),
+            TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata"));
+
+        today.ShouldBe(new DateOnly(2026, 10, 29));
+    }
+
     /// <summary>Counts document searches that reach the (mock) API.</summary>
     private sealed class CountingHandler : DelegatingHandler
     {

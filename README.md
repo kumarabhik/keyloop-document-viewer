@@ -281,7 +281,7 @@ After about five failures in ten seconds, a source's circuit breaker opens (`cir
 
 ```bash
 dotnet build                          # warnings are errors; also regenerates docs/openapi.json
-dotnet test                           # all test projects (320 tests, ~1–2 min; needs Docker for 6 of them)
+dotnet test                           # all test projects (331 tests, ~1–2 min; needs Docker for 6 of them)
 dotnet format --verify-no-changes     # style check
 ```
 
@@ -336,7 +336,7 @@ In plain words: one user gets cache hits in a few milliseconds. With 50 users on
 
 | Signal | Where | Notes |
 |---|---|---|
-| Logs | stdout, compact JSON (Serilog) | Every event carries `@tr` (trace id). VINs appear only masked: `MA3**********0001` (D-011) |
+| Logs | stdout, compact JSON (Serilog) | Every event carries `@tr` (trace id). VINs appear only masked: `MA3**********0001` (D-011). Successful probes and scrapes are not logged. The UI's nginx logs paths without query strings, so deep-link VINs never reach its log (E-017) |
 | Metrics | <http://localhost:8080/metrics> (Prometheus) | `docviewer_source_requests_total`, `docviewer_source_duration_seconds`, `docviewer_cache_requests_total`, `docviewer_partial_responses_total`, `docviewer_stale_served_total`, `docviewer_circuit_state`; no VIN labels. Grafana dashboard provisioned at <http://localhost:3000> |
 | Traces | Jaeger <http://localhost:16686> (obs profile) | One trace per search with the two source calls as parallel child spans; see [docs/diagrams/trace-example.md](docs/diagrams/trace-example.md) |
 | Health | `/healthz` (process up), `/readyz` (`Healthy` / `Degraded`) | Docker healthcheck runs `dotnet DocViewer.Api.dll --healthcheck` inside the chiselled image (D-023) |
@@ -400,12 +400,13 @@ The whole project was built with AI assistance: a chat assistant for the first-p
 | AI-010 | Tests that stayed green with the bug present (a 503 test passing by timeout; a DB-down test that only covered instant refusals) | False confidence; a real outage still broke the Docker healthcheck | Cold-run failure instrumented; real Docker outage |
 | AI-011 | A launch profile to switch the Blazor environment | Has no effect in .NET 10 (build-time property) | Response headers, then the SDK's own targets file |
 | AI-012 | Generated OpenAPI spec trusted because it cannot drift | It required a field healthy responses omit (E-016) | Contract fuzzing |
+| AI-013 | The agent's own Day 4–5 code, all tests green | 9 real bugs (time zone, race, timeout, mock gaps) and a raw VIN in nginx logs (E-017) | Independent code review + checking real container logs |
 
 ### 10.4 Quality: what the process produced
 
-- 320 automated tests plus contract fuzzing in CI; coverage Domain 99 %, Application 98 %, Infrastructure 94 %, Api 94 %, Web 90 % (gate: 85 % on Domain + Application).
+- 331 automated tests plus contract fuzzing in CI; coverage Domain 99 %, Application 98 %, Infrastructure 94 %, Api 95 %, Web 91 % (gate: 85 % on Domain + Application).
 - Every invariant in SYSTEMS.md §6 is guarded by a tagged test; every row of the failure matrix (DESIGN §6.3) is automated.
-- 26 recorded decisions, 16 recorded errors and 12 AI corrections, each dated and linked to code and tests.
+- 26 recorded decisions, 17 recorded errors and 13 AI corrections, each dated and linked to code and tests.
 - The submission runs from a clean clone with one command and no secrets.
 
 **What I learned about working with an agent:** it is fast and thorough when the target is written down and checkable, and it is most dangerous when it is confident about something nobody checked — a library default, a log format, a stack choice. The process above exists to turn those cases into failing tests or explicit questions as early as possible.

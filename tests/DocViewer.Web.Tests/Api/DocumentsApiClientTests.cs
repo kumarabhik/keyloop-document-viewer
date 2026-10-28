@@ -89,6 +89,25 @@ public sealed class DocumentsApiClientTests
     }
 
     [Fact]
+    public async Task Search_HttpClientTimeout_ReturnsFailedInsteadOfThrowing()
+    {
+        // HttpClient.Timeout surfaces as TaskCanceledException without the caller having cancelled (D5.6 review).
+        var outcome = await ClientFor(new TimeoutHandler()).SearchAsync(Vin, refresh: false, CancellationToken.None);
+
+        outcome.ShouldBeOfType<SearchOutcome.Failed>().Message.ShouldContain("did not answer in time");
+    }
+
+    [Fact]
+    public async Task SourceHealthAndFaults_HttpClientTimeout_DegradeQuietly()
+    {
+        var client = ClientFor(new TimeoutHandler());
+
+        (await client.GetSourceHealthAsync(CancellationToken.None)).ShouldBeNull();
+        (await client.GetFaultAsync(WireValues.Sales, CancellationToken.None)).ShouldBeNull();
+        (await client.SetFaultAsync(WireValues.Sales, "none", CancellationToken.None)).ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task SourceHealth_ApiUnreachable_ReturnsNull()
     {
         (await ClientFor(new ThrowingHandler()).GetSourceHealthAsync(CancellationToken.None)).ShouldBeNull();
@@ -130,6 +149,12 @@ public sealed class DocumentsApiClientTests
 
             return response;
         }
+    }
+
+    private sealed class TimeoutHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            throw new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout of 100 seconds elapsing.");
     }
 
     private sealed class ThrowingHandler : HttpMessageHandler

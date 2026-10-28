@@ -19,8 +19,30 @@ public sealed class PostgresFactAttribute : FactAttribute
         }
     }
 
-    // A cheap check that the Docker engine endpoint exists; Testcontainers reports anything subtler itself.
-    private static bool DockerLooksAvailable() =>
-        Environment.GetEnvironmentVariable("DOCKER_HOST") is { Length: > 0 }
-        || (OperatingSystem.IsWindows() ? File.Exists(@"\\.\pipe\docker_engine") : File.Exists("/var/run/docker.sock"));
+    // A cheap check that a Docker engine endpoint exists; Testcontainers reports anything subtler itself. Covers the
+    // default socket, Docker Desktop for macOS without the default-socket option, rootless Docker and a Docker context
+    // (D5.6 review). A stale socket with no daemon makes the tests fail rather than skip, which is the louder outcome.
+    private static bool DockerLooksAvailable()
+    {
+        if (Environment.GetEnvironmentVariable("DOCKER_HOST") is { Length: > 0 }
+            || Environment.GetEnvironmentVariable("DOCKER_CONTEXT") is { Length: > 0 })
+        {
+            return true;
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            return File.Exists(@"\\.\pipe\docker_engine") || File.Exists(@"\\.\pipe\dockerDesktopLinuxEngine");
+        }
+
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var runtimeDir = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
+        string?[] sockets =
+        [
+            "/var/run/docker.sock",
+            Path.Combine(home, ".docker", "run", "docker.sock"),
+            runtimeDir is null ? null : Path.Combine(runtimeDir, "docker.sock"),
+        ];
+        return sockets.Any(s => s is not null && File.Exists(s));
+    }
 }

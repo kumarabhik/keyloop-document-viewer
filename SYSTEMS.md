@@ -320,7 +320,14 @@ Record anything that cost more than ~15 minutes, would bite someone again, or ch
 - **Fix:** `OptionalWhenNullSchemaTransformer` (generic: any `WhenWritingNull`/`WhenWritingDefault` property). Re-run: 1 390 generated requests, 0 failures.
 - **Prevention:** `OpenApiContractTests` and the `contract-fuzz` CI job.
 
-<!-- Add new errors above this line, continuing from E-017. -->
+### E-017: The UI container logged raw VINs from deep links
+- **Date:** 2026-10-28 · **Task:** D5.6 security review · **Severity:** high (privacy, invariant 7)
+- **Symptom:** `docker logs docviewer-web-1` contained `"GET /?vin=MA3EWB81S00100007 HTTP/1.1"`.
+- **Root cause:** nginx's default `combined` log format records the whole request line, query string included, and the UI's deep links carry the VIN there (D4.2). Invariant 7's tests cover the API's logs, spans and metrics, but not the new nginx container added in D4.6.
+- **Fix:** `log_format no_query` (method, `$uri`, protocol, status, bytes; never `$request` or `$args`) in `docker/nginx-web.conf`. Re-checked: after searches with a valid VIN, an invalid one and a deep link, 0 raw-VIN lines across all six containers' logs and `/metrics`.
+- **Prevention:** The D5.6 check (grep every container's logs after real requests) is the rule for any new container. Not automated yet: a compose-level privacy check in CI is a good next step.
+
+<!-- Add new errors above this line, continuing from E-018. -->
 
 ---
 
@@ -442,7 +449,14 @@ Evidence for the brief's "AI Engineering & Verification" criterion. Record **eve
 - **How it was caught:** Contract fuzzing (Kumar's backlog choice) on its first and second runs.
 - **Correction:** D-026: transformers fix the spec, tests pin the findings, fuzzing runs in CI. Lesson: check generated artefacts against real behaviour, not only against their generator.
 
-<!-- Add new AI corrections above this line, continuing from AI-013. -->
+### AI-013: Review of the agent's own Day 4–5 code found real bugs, and one wrong rule
+- **Date / phase:** 2026-10-28 · review (D5.6)
+- **AI output:** Code from the previous two sessions, all tests green: the Blazor client, health panel, mock mode, healthcheck probe, k6 script, Postgres test skip logic, and an AGENTS.md rule about Razor quotes.
+- **Problem:** A `/code-review` pass found, and the agent then confirmed in the code: expiry day counts from the browser's time zone while the server uses IST; a superseded search could overwrite a newer one; an `HttpClient` timeout escaped the "never throws" client; the fault dropdown could show a mode the mock did not have; mock mode could not show `circuit_open`, `half_open` or cache `HIT` (breaking the agent's own AGENTS rule); the k6 parser silently mis-timed phases; the probe built port 80 from an empty variable. The agent's AGENTS rule "no nested quotes in Razor attributes" was over-broad: only lambdas without `@( )` break. The agent's own security pass then found E-017.
+- **How it was caught:** Independent review of the diff since the first submission, then each finding checked against the code before acting; privacy checked on real container output.
+- **Correction:** All fixed with tests (331 total) except the healthcheck target, which is Kumar's decision (Q4). Lesson: green tests written by the same agent are not a review.
+
+<!-- Add new AI corrections above this line, continuing from AI-014. -->
 
 ---
 
@@ -453,6 +467,8 @@ Evidence for the brief's "AI Engineering & Verification" criterion. Record **eve
 | Q1 | Do we need pagination for very long histories, or is a single list fine for the demo? | Kumar | Open — backlog |
 | Q2 | Should stale fallback be disabled by config for audit-sensitive dealers? | Kumar | Open |
 | Q3 | `/readyz` returns 503 when the database is down (DESIGN §7.1), but searches still work without it (invariant 10). Should readiness report DB loss as *degraded* (200) so a DB blip does not pull every instance from the load balancer? | Kumar | Closed 2026-10-28 — *degraded* (200), D-024 |
+| Q4 | The Docker healthcheck probes `/readyz`, which after D-024 answers 200 whenever the process is up, so it now detects nothing more than `/healthz` while opening a database connection every 10 s. Switch the probe to `/healthz`? (D5.6 review) | Kumar | Open |
+| R3 | Raw VINs are stored at rest in the Redis cache key (`docs:v1:{VIN}`) and `source_snapshot.vin`; both need the VIN for lookup. D-011 hashes only the audit table. | — | Accepted risk, recorded in D5.6 |
 | R1 | Per-process breaker state across replicas (D-007) | — | Accepted risk |
 | R2 | Duplicate heuristic false positives (D-009) | — | Accepted risk, tested |
 

@@ -48,6 +48,15 @@ public sealed class ContainerHealthCheckTests : IDisposable
     }
 
     [Theory]
+    [InlineData(null, "8080")]
+    [InlineData("", "8080")] // used to build http://localhost:/readyz, i.e. port 80
+    [InlineData("5000", "5000")]
+    [InlineData(" 5000 ; 5001", "5000")]
+    [InlineData("abc,9000", "9000")]
+    public void PortFrom_FirstNumericEntryElse8080(string? httpPorts, string expected) =>
+        ContainerHealthCheck.PortFrom(httpPorts).ShouldBe(expected);
+
+    [Theory]
     [InlineData(new[] { "--healthcheck" }, true)]
     [InlineData(new[] { "--healthcheck", "/healthz" }, true)]
     [InlineData(new string[0], false)]

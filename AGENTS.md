@@ -123,7 +123,7 @@ Rules: append-only; never renumber; supersede old decisions instead of editing t
 - All HTTP goes through the typed `DocumentsApiClient`; it returns `SearchOutcome` values and never throws for expected API outcomes.
 - Every async view handles loading, empty, error, partial and stale states, and shows the trace id on errors.
 - Mock mode (`MockApiHandler`) must serve every state the real API can return. Add a demo VIN there when you add a state.
-- Razor attribute values must not contain nested double quotes; use a constant or a helper property.
+- In a Razor attribute, an event-handler lambda (`@onchange="e => Save(…)"`) must not contain double quotes: the attribute ends at the first one. Use a constant or a helper. Explicit `@( … )` expressions with quotes inside compile fine (D5.6 review corrected an over-broad first version of this rule).
 - Mock mode is picked at build time (`-p:WasmApplicationEnvironmentName=Mock`); a launch-profile environment variable has no effect (AI-011).
 
 ### Tests

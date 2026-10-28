@@ -28,7 +28,7 @@
                         <td>@(source.LastLatencyMs is { } ms ? $"{ms} ms" : "—")</td>
                         <td>@(source.LastCheckedAt is { } at ? Format.Timestamp(at, Time) : "—")</td>
                         <td>
-                            <select data-fault="@source.Name" aria-label="Fault mode for @WireValues.Label(source.Name)"
+                            <select @key="@($"{source.Name}-{_redraw}")" data-fault="@source.Name" aria-label="Fault mode for @WireValues.Label(source.Name)"
                                     value="@ModeOf(source.Name)" @onchange="e => SetFaultAsync(source.Name, e.Value?.ToString() ?? Healthy)">
                                 @foreach (var (mode, label) in FaultModes)
                                 {
@@ -66,6 +66,7 @@
     private readonly Dictionary<string, string> _modes = [];
     private IReadOnlyList<SourceHealthResponse>? _health;
     private bool _loaded;
+    private int _redraw; // bumped to reset a select whose change the mock refused
     private string? _message;
     private int _lastRefreshKey = -1;
 
@@ -90,13 +91,30 @@
     private async Task LoadAsync()
     {
         _health = await Api.GetSourceHealthAsync(_cts.Token);
+        foreach (var source in WireValues.SourceNames)
+        {
+            // Show what the mock is really doing (k6, curl or another tab may have changed it).
+            if (await Api.GetFaultAsync(source, _cts.Token) is { } mode)
+            {
+                _modes[source] = mode;
+            }
+        }
+
         _loaded = true;
     }
 
     private async Task SetFaultAsync(string source, string mode)
     {
-        _modes[source] = mode;
         var ok = await Api.SetFaultAsync(source, mode, _cts.Token);
+        if (ok)
+        {
+            _modes[source] = mode;
+        }
+        else
+        {
+            _redraw++; // put the select back to the mode the mock still has
+        }
+
         _message = ok
             ? $"{Format.SourceName(source)} set to \"{FaultModes.First(f => f.Mode == mode).Label}\"."
             : $"Could not reach the {Format.SourceName(source)} mock. The switches work only with the local mock systems.";

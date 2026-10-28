@@ -4,6 +4,7 @@
 @inject NavigationManager Navigation
 @inject RecentSearches RecentStore
 @inject TimeProvider Time
+@inject Microsoft.Extensions.Options.IOptions<ApiOptions> Options
 
 <PageTitle>@(_vin is null ? "Vehicle documents" : $"{_vin.Value} · Vehicle documents")</PageTitle>
 
@@ -95,7 +96,7 @@ else
 
     private DocumentFilter Filter => DocumentFilter.FromQuery(SourceQuery, TypeQuery, StatusQuery);
 
-    private DateOnly Today => Format.Today(Time);
+    private DateOnly Today => Format.Today(Time, Options.Value.DealershipZone);
 
     protected override async Task OnInitializedAsync() => _recent = await RecentStore.GetAsync();
 
@@ -137,15 +138,22 @@ else
         _search?.Cancel();
         _search?.Dispose();
         var search = _search = new CancellationTokenSource();
+        var vin = _vin;
 
         _loading = true;
         StateHasChanged();
         try
         {
-            _outcome = await Api.SearchAsync(_vin, refresh, search.Token);
-            if (_outcome is SearchOutcome.Found)
+            var outcome = await Api.SearchAsync(vin, refresh, search.Token);
+            if (!ReferenceEquals(search, _search))
             {
-                _recent = await RecentStore.AddAsync(_vin);
+                return; // a newer search started while this answer was on its way; it must not overwrite that one
+            }
+
+            _outcome = outcome;
+            if (outcome is SearchOutcome.Found)
+            {
+                _recent = await RecentStore.AddAsync(vin);
             }
         }
         catch (OperationCanceledException) when (search.IsCancellationRequested)

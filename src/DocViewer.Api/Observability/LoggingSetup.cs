@@ -36,6 +36,10 @@ internal static class LoggingSetup
             // Without this the middleware falls back to the static Log.Logger (see AddStructuredLogging).
             o.Logger = app.ApplicationServices.GetRequiredService<Serilog.ILogger>();
             o.MessageTemplate = "http.request {RequestMethod} {Route} responded {StatusCode} in {Elapsed:0.0} ms";
+            // The container probe calls /readyz every 10 s; successful probes and scrapes are noise (D5.6 review).
+            o.GetLevel = (context, _, ex) => ex is not null || context.Response.StatusCode >= 500 ? LogEventLevel.Error
+                : OperationalPaths.Contains(context.Request.Path) ? LogEventLevel.Verbose
+                : LogEventLevel.Information;
             o.GetMessageTemplateProperties = (context, _, elapsedMs, statusCode) =>
             [
                 new LogEventProperty("RequestMethod", new ScalarValue(context.Request.Method)),

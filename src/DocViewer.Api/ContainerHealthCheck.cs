@@ -14,10 +14,18 @@ internal static class ContainerHealthCheck
     public static Task<int> RunAsync(string[] args)
     {
         var path = args.Length > 1 ? args[1] : "/readyz";
-        // ASP.NET images listen on ASPNETCORE_HTTP_PORTS (8080 by default); probe the first one.
-        var port = Environment.GetEnvironmentVariable("ASPNETCORE_HTTP_PORTS")?.Split([';', ','])[0] ?? "8080";
+        var port = PortFrom(Environment.GetEnvironmentVariable("ASPNETCORE_HTTP_PORTS"));
         return ProbeAsync(new Uri($"http://localhost:{port}{path}"), TimeSpan.FromSeconds(3));
     }
+
+    /// <summary>
+    /// ASP.NET images listen on <c>ASPNETCORE_HTTP_PORTS</c> (8080 by default); probe the first one. Unset, empty or
+    /// non-numeric means 8080. Deployments that bind with <c>ASPNETCORE_URLS</c> or Kestrel endpoints instead must
+    /// pass the path and set this variable too (D-023).
+    /// </summary>
+    internal static string PortFrom(string? httpPorts) =>
+        httpPorts?.Split([';', ','], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(p => int.TryParse(p, out _)) ?? "8080";
 
     internal static async Task<int> ProbeAsync(Uri uri, TimeSpan timeout)
     {

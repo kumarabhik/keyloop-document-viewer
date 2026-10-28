@@ -16,10 +16,11 @@ internal static class Format
         return TimeZoneInfo.ConvertTime(value, time.LocalTimeZone).ToString("dd MMM yyyy, HH:mm", CultureInfo.InvariantCulture);
     }
 
-    public static DateOnly Today(TimeProvider time)
+    /// <summary>Today's date in <paramref name="zone"/> (the dealership's), whatever the viewer's own zone is.</summary>
+    public static DateOnly Today(TimeProvider time, TimeZoneInfo zone)
     {
         ArgumentNullException.ThrowIfNull(time);
-        return DateOnly.FromDateTime(time.GetLocalNow().DateTime);
+        return DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(time.GetUtcNow(), zone).DateTime);
     }
 
     public static string Plural(int count, string noun) =>

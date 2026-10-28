@@ -28,7 +28,7 @@ internal static class TelemetrySetup
             {
                 tracing
                     .AddSource(DocViewerTracing.SourceName)
-                    .AddAspNetCoreInstrumentation(o => o.Filter = context => !IsOperationalPath(context.Request.Path))
+                    .AddAspNetCoreInstrumentation(o => o.Filter = context => !OperationalPaths.Contains(context.Request.Path))
                     .AddHttpClientInstrumentation()
                     .AddEntityFrameworkCoreInstrumentation()
                     .AddProcessor(new VinRedactionProcessor()); // before any exporter, so nothing leaves unmasked
@@ -41,8 +41,4 @@ internal static class TelemetrySetup
 
         return builder;
     }
-
-    /// <summary>Scrapes and probes would otherwise dominate the trace view.</summary>
-    private static bool IsOperationalPath(PathString path) =>
-        path.StartsWithSegments("/metrics") || path.StartsWithSegments("/healthz") || path.StartsWithSegments("/readyz");
 }

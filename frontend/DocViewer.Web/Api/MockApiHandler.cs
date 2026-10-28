@@ -16,7 +16,10 @@ internal sealed class MockApiHandler(TimeProvider timeProvider, ApiOptions optio
 {
     private const string Healthy = "none";
 
-    /// <summary>Demo VINs. 1, 4, 5, 6 and 7 mirror the real seed data (DESIGN.md Appendix A); 11–13 exist only here.</summary>
+    /// <summary>The API's cache TTL (D-006): a repeat search inside it answers <c>HIT</c>, like the real API.</summary>
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(60);
+
+    /// <summary>Demo VINs. 1, 4, 5, 6 and 7 mirror the real seed data (DESIGN.md Appendix A); 11–14 exist only here.</summary>
     public static class Vins
     {
         public const string Complete = "MA3EWB81S00100001";
@@ -27,10 +30,13 @@ internal sealed class MockApiHandler(TimeProvider timeProvider, ApiOptions optio
         public const string Partial = "MA3EWB81S00100011";
         public const string Stale = "MA3EWB81S00100012";
         public const string Unavailable = "MA3EWB81S00100013";
+        public const string CircuitOpen = "MA3EWB81S00100014";
     }
 
     private readonly Dictionary<string, string> _faults = new() { [WireValues.Sales] = Healthy, [WireValues.Service] = Healthy };
     private readonly Dictionary<string, string> _lastStatus = [];
+    private readonly HashSet<string> _halfOpen = [];
+    private readonly Dictionary<string, DateTimeOffset> _cachedAt = [];
     private readonly Lock _gate = new();
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -42,9 +48,11 @@ internal sealed class MockApiHandler(TimeProvider timeProvider, ApiOptions optio
         }
 
         var uri = request.RequestUri!; // HttpClient resolves an absolute URI before any handler runs
-        if (request.Method == HttpMethod.Post && uri.AbsolutePath == "/__admin/fault")
+        if (uri.AbsolutePath == "/__admin/fault")
         {
-            return await SetFaultAsync(request, uri, cancellationToken);
+            return request.Method == HttpMethod.Post
+                ? await SetFaultAsync(request, uri, cancellationToken)
+                : Json(HttpStatusCode.OK, new FaultRequest(FaultOf(SourceAt(uri))), WebJsonContext.Default.FaultRequest);
         }
 
         return uri.AbsolutePath.Trim('/').Split('/') switch
@@ -69,6 +77,7 @@ internal sealed class MockApiHandler(TimeProvider timeProvider, ApiOptions optio
         {
             _lastStatus[WireValues.Sales] = sales.Status;
             _lastStatus[WireValues.Service] = service.Status;
+            _halfOpen.Clear(); // the trial call after a fault has been made
         }
 
         if (!HasDocuments(sales) && !HasDocuments(service))
@@ -80,7 +89,7 @@ internal sealed class MockApiHandler(TimeProvider timeProvider, ApiOptions optio
             return problem;
         }
 
-        var today = DateOnly.FromDateTime(timeProvider.GetLocalNow().DateTime);
+        var today = Components.Format.Today(timeProvider, options.DealershipZone); // the server's "today", not the browser's
         var documents = DocumentsFor(vin.Value, today)
             .Where(d => HasDocuments(d.Source == WireValues.Sales ? sales : service))
             .OrderByDescending(d => d.Date).ThenBy(d => d.Source, StringComparer.Ordinal).ThenBy(d => d.SourceId, StringComparer.Ordinal)
@@ -97,7 +106,7 @@ internal sealed class MockApiHandler(TimeProvider timeProvider, ApiOptions optio
             documents.Count(d => d.Flags.Contains(WireValues.PossibleDuplicate)),
             documents.Count(d => d.Flags.Contains(WireValues.Conflict)));
         var body = new DocumentsResponse(vin.Value, sources.Any(s => !s.IsOk), timeProvider.GetUtcNow(),
-            refresh ? "BYPASS" : "MISS", traceId, sources, summary, documents);
+            CacheStatus(vin.Value, refresh, complete: sources.All(s => s.IsOk)), traceId, sources, summary, documents);
 
         var response = Json(HttpStatusCode.OK, body, WebJsonContext.Default.DocumentsResponse);
         response.Headers.Add(DocumentsApiClient.TraceIdHeader, traceId);
@@ -106,17 +115,39 @@ internal sealed class MockApiHandler(TimeProvider timeProvider, ApiOptions optio
 
     private static bool HasDocuments(SourceStatusResponse source) => source.IsOk || source.IsStale;
 
-    private SourceStatusResponse SourceFor(string source, string vin)
+    // Like the API: only complete results are cached (D-006); refresh=true skips the read but still stores.
+    private string CacheStatus(string vin, bool refresh, bool complete)
     {
-        string fault;
+        var now = timeProvider.GetUtcNow();
         lock (_gate)
         {
-            fault = _faults[source];
-        }
+            var hit = !refresh && _cachedAt.TryGetValue(vin, out var at) && now - at < CacheTtl;
+            if (!hit && complete)
+            {
+                _cachedAt[vin] = now;
+            }
 
+            return hit ? "HIT" : refresh ? "BYPASS" : "MISS";
+        }
+    }
+
+    private string FaultOf(string source)
+    {
+        lock (_gate)
+        {
+            return _faults[source];
+        }
+    }
+
+    private string SourceAt(Uri uri) => uri.Authority == options.SalesMockUrl.Authority ? WireValues.Sales : WireValues.Service;
+
+    private SourceStatusResponse SourceFor(string source, string vin)
+    {
+        var fault = FaultOf(source);
         var outcome = (source, vin) switch
         {
             (WireValues.Service, Vins.Partial) => "timeout",
+            (WireValues.Service, Vins.CircuitOpen) => "circuit_open",
             (WireValues.Service, Vins.Stale) => WireValues.Stale,
             (_, Vins.Unavailable) => "error",
             _ => fault switch { Healthy => WireValues.Ok, "timeout" or "slow" => "timeout", _ => "error" },
@@ -127,6 +158,7 @@ internal sealed class MockApiHandler(TimeProvider timeProvider, ApiOptions optio
             WireValues.Ok => new SourceStatusResponse(source, WireValues.Ok, 120, 0, null, null),
             WireValues.Stale => new SourceStatusResponse(source, WireValues.Stale, 2001, 0, timeProvider.GetUtcNow().AddHours(-3), "timeout"),
             "timeout" => new SourceStatusResponse(source, "timeout", 2001, 0, null, "timeout"),
+            "circuit_open" => new SourceStatusResponse(source, "circuit_open", 0, 0, null, "circuit_open"),
             _ => new SourceStatusResponse(source, "error", 35, 0, null, "http_500"),
         };
     }
@@ -137,7 +169,7 @@ internal sealed class MockApiHandler(TimeProvider timeProvider, ApiOptions optio
         {
             return WireValues.SourceNames.Select(name => new SourceHealthResponse(
                 name,
-                _faults[name] == Healthy ? "closed" : "open",
+                _faults[name] != Healthy ? "open" : _halfOpen.Contains(name) ? "half_open" : "closed",
                 _lastStatus.GetValueOrDefault(name),
                 _lastStatus.ContainsKey(name) ? 120 : null,
                 _lastStatus.ContainsKey(name) ? timeProvider.GetUtcNow() : null)).ToList();
@@ -149,10 +181,16 @@ internal sealed class MockApiHandler(TimeProvider timeProvider, ApiOptions optio
         var body = request.Content is null
             ? null
             : await JsonSerializer.DeserializeAsync(await request.Content.ReadAsStreamAsync(cancellationToken), WebJsonContext.Default.FaultRequest, cancellationToken);
-        var source = uri.Authority == options.SalesMockUrl.Authority ? WireValues.Sales : WireValues.Service;
+        var source = SourceAt(uri);
+        var mode = body?.Mode ?? Healthy;
         lock (_gate)
         {
-            _faults[source] = body?.Mode ?? Healthy;
+            if (mode == Healthy && _faults[source] != Healthy)
+            {
+                _halfOpen.Add(source); // healed: like the real breaker, it lets one trial call through first
+            }
+
+            _faults[source] = mode;
         }
 
         return new HttpResponseMessage(HttpStatusCode.OK);
@@ -188,7 +226,7 @@ internal sealed class MockApiHandler(TimeProvider timeProvider, ApiOptions optio
                 yield return Doc(WireValues.Service, "SV-WAR-7", "WARRANTY", "Warranty registration", today.AddYears(-2), today.AddYears(2), WireValues.Conflict);
                 yield return Doc(WireValues.Sales, "INV-7", "INVOICE", "Sales Invoice", today.AddYears(-2), null);
                 break;
-            case Vins.Complete or Vins.Partial or Vins.Stale or Vins.Unavailable:
+            case Vins.Complete or Vins.Partial or Vins.Stale or Vins.Unavailable or Vins.CircuitOpen:
                 yield return Doc(WireValues.Sales, "INV-1", "INVOICE", "Sales Invoice", today.AddYears(-3), null);
                 yield return Doc(WireValues.Sales, "INS-1", "INSURANCE", "Comprehensive Insurance", today.AddMonths(-6), today.AddMonths(6));
                 yield return Doc(WireValues.Sales, "WAR-1", "WARRANTY", "Extended Warranty", today.AddYears(-3), today.AddYears(2));

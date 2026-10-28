@@ -87,8 +87,13 @@ function setFault(baseUrl, mode) {
   http.post(`${baseUrl}/__admin/fault`, JSON.stringify({ mode }), { headers: { 'Content-Type': 'application/json' }, tags: { name: 'admin' } });
 }
 
+// "2m", "90s", "5m30s", "1h": the breaker phase must start only after the mixed phase has ended.
 function addSeconds(duration, extra) {
-  const m = /^(\d+)(s|m)$/.exec(duration);
-  const seconds = m ? Number(m[1]) * (m[2] === 'm' ? 60 : 1) : 120;
+  if (!/^(\d+h)?(\d+m)?(\d+s)?$/.test(duration) || duration === '') {
+    throw new Error(`DURATION must look like 2m, 90s, 5m30s or 1h; got "${duration}"`);
+  }
+  const unit = { h: 3600, m: 60, s: 1 };
+  let seconds = 0;
+  for (const [, n, u] of duration.matchAll(/(\d+)([hms])/g)) seconds += Number(n) * unit[u];
   return `${seconds + extra}s`;
 }
