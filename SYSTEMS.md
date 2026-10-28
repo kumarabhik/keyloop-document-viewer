@@ -166,7 +166,28 @@ The project's memory. If it matters later, it goes here. Every agent and every h
 - **Alternatives:** prometheus-net (metrics only, no tracing); per-instrumentation `Enrich*` callbacks for redaction (behave differently on .NET 10, where HttpClient emits its own activities).
 - **Consequences:** Beta packages may change API between minor versions; pinned in `Directory.Packages.props`. Counter tags are lower snake case (`source="sales"`, `outcome="circuit_open"`).
 
-<!-- Add new decisions above this line, continuing from D-023. -->
+### D-023: API container healthcheck via a built-in `--healthcheck` mode
+- **Date:** 2026-10-27 · **Status:** Accepted
+- **Context:** Kumar asked for Docker to report the API's health. The chiselled runtime image has no shell or curl, so a normal `HEALTHCHECK` command cannot run.
+- **Decision:** `dotnet DocViewer.Api.dll --healthcheck [path]` exits before the app is built, GETs `http://localhost:$ASPNETCORE_HTTP_PORTS/readyz` (3 s timeout) and exits 0 on 2xx, else 1. Compose: every 10 s, 3 retries, 20 s start period.
+- **Alternatives:** non-chiselled image with curl (larger attack surface); probing `/healthz` (would never show a database outage).
+- **Consequences:** Each probe starts a short-lived `dotnet` process (~100 ms CPU). Probing `/readyz` means a Postgres outage shows the API as `unhealthy` in Docker while searches still work; Docker Compose does not restart unhealthy containers, so this is informational. Tied to Q3.
+
+### D-024: `/readyz` reports a database outage as `Degraded` (HTTP 200), not 503
+- **Date:** 2026-10-28 · **Status:** Accepted · Resolves Q3 · Refines D-023
+- **Context:** `/readyz` returned 503 when the database was down, yet searches keep working without it (invariant 10). A load balancer would pull every instance out on a database blip and turn a soft degradation into a full outage.
+- **Decision:** (Kumar, 2026-10-28) `DatabaseHealthCheck` returns `Degraded`; ASP.NET Core maps that to 200 with body `Degraded`. Only a dead process fails readiness.
+- **Alternatives:** keep 503 (previous design); drop the DB from readiness entirely (would hide the outage from anyone reading the body).
+- **Consequences:** The Docker healthcheck (D-023) now stays `healthy` with Postgres stopped; the outage is visible in the `/readyz` body, the logs and the DB error counters instead. Test: `DatabaseDown_ReadyzIsDegraded_AndSearchStillSucceeds`.
+
+### D-025: Demo client in Blazor WebAssembly (C#), not React
+- **Date:** 2026-10-28 · **Status:** Accepted · Changes the Day 4 plan (D-001 still holds: the UI is an extra)
+- **Context:** Day 4 planned Vite + React + MSW + Vitest. Kumar chose Blazor WebAssembly so the whole repo is C# and needs no Node.js.
+- **Decision:** `frontend/DocViewer.Web` (Blazor WASM standalone) references `DocViewer.Domain` only, so VIN hints use the real `Vin.TryParse`. Wire DTOs are small records in the client, guarded by a test that compares them with `docs/openapi.json` (no code generator). Mock mode = an in-process `HttpMessageHandler` (`Api:UseMocks`) that serves every state; MSW's role. Tests: bUnit + xUnit + Shouldly. One plain stylesheet with colour tokens (light and dark), no Tailwind. Served by `nginx:alpine` in compose on :5173. The UI fetches unfiltered results and filters on the client, so the expiry banner always counts the whole vehicle.
+- **Alternatives:** React (needs Node, a second language); NSwag/Kiota client generation (one more build-time dependency for five DTOs); Blazor Server (needs a server connection per user).
+- **Consequences:** WASM first load is a few MB (17 MB uncompressed; nginx serves the pre-compressed files). Mock mode is chosen at build time (`-p:WasmApplicationEnvironmentName=Mock`, AI-011). Mocks get a CORS policy for the UI origin so the health panel can flip `/__admin/fault` (demo only).
+
+<!-- Add new decisions above this line, continuing from D-026. -->
 
 ---
 
@@ -242,7 +263,36 @@ Record anything that cost more than ~15 minutes, would bite someone again, or ch
 - **Fix:** One final Dockerfile stage per app with its own `ENTRYPOINT`, chosen by compose `target:`; runtime image `aspnet:10.0-noble-chiseled-extra` (adds tzdata and ICU).
 - **Prevention:** Options validation on start did its job: a wrong timezone fails fast instead of computing expiry in UTC. CI builds the images (`docker` job).
 
-<!-- Add new errors above this line, continuing from E-010. -->
+### E-010: One 503 for a search right after `docker compose up --build`, with Postgres stopped
+- **Date:** 2026-10-27 · **Task:** D-023 verification · **Severity:** medium (not reproduced)
+- **Symptom:** While testing the healthcheck, the first search after the stack was built and started returned 503 while Postgres was stopped. Two reruns (warm, and freshly recreated API) returned 200 within 0.2–0.7 s per source.
+- **Root cause:** Unproven; the response body was not captured. Most likely both source calls exceeded the 1.5 s attempt timeout on a cold, busy host (E-005), and with the database down there was no snapshot, so 503 is the designed answer (DESIGN §6.3). Postgres itself is not on the search path (confirmed: searches return 200 with it stopped).
+- **Fix:** None yet. Possible hardening: warm up the source connections at start-up so the first user request is not the cold one.
+- **Prevention:** When a check fails unexpectedly, capture the full response before rerunning (`curl -i` to a file).
+
+### E-011: One API test failed on the first full run of the session, then passed 5 times
+- **Date:** 2026-10-28 · **Task:** session start · **Severity:** low (not reproduced)
+- **Symptom:** First `dotnet test` after a cold build: `DocViewer.Api.Tests` 1 failed / 44 passed, and the project took 24 s instead of 5–10 s. The test's name was not captured (the output filter only printed totals). 3 isolated runs and 2 full-suite runs with TRX logging afterwards: 0 failures.
+- **Root cause:** Unknown. Same shape as E-005/E-010 (cold JIT plus all test projects in parallel).
+- **Fix:** None. Session-start runs now use `--logger trx` so a failing name is never lost.
+- **Prevention:** If it recurs, the TRX file names the test; then fix the cause, not the assertion (AGENTS.md §9.7).
+- **Update (same day):** reproduced and fixed, see E-013.
+
+### E-012: API container turned `unhealthy` with Postgres stopped, although `/readyz` answered 200
+- **Date:** 2026-10-28 · **Task:** D-024 verification in Docker · **Severity:** medium
+- **Symptom:** After the `Degraded` change, `docker compose stop postgres` still flipped the API to `unhealthy` (probe exit codes `0 1 1 1`). `/readyz` answered `Degraded` but took 3.8–4.0 s; the probe gives up at 3 s (D-023).
+- **Root cause:** Connecting to a stopped compose service takes ~4 s to fail, and that wait does not stop when the health check's token is cancelled, so neither the registration `timeout` nor cancellation helped (tried first; still 3.9 s). The unit test used a closed port on 127.0.0.1, which is refused instantly, so it never saw a slow failure.
+- **Fix:** `DatabaseHealthCheck.ProbeAsync` stops waiting after 1 s itself (`WaitAsync`), reports `Degraded`, and disposes the context only when the abandoned connect finishes. Re-verified in Docker: `/readyz` in ~1.0 s, container `healthy` for 5 probes with Postgres down, `Healthy` again after restart.
+- **Prevention:** `DatabaseHealthCheckTests` (a connect that never answers). Rule: test outages as hangs, not only as refusals.
+
+### E-013: First test run after a build: probe test failed, and its sibling passed for the wrong reason (cause of E-011)
+- **Date:** 2026-10-28 · **Task:** D3.7 clean-copy check · **Severity:** medium
+- **Symptom:** On a clean copy, `dotnet build --no-incremental` then `dotnet test` failed `ContainerHealthCheckTests.Probe_ExitCodeFollowsStatus(200 → 0)` 2 of 2 times; later runs passed.
+- **Root cause:** Instrumenting the probe (scratch copy only) showed every request to the fresh WireMock server took > 3 s on the cold run (JIT while six test projects start in parallel). The test used the production 3 s timeout, so 200 timed out as "unhealthy", and the 503 case passed only because it also timed out.
+- **Fix:** Status-mapping tests use a 30 s timeout and assert WireMock really answered with that status. Two cold rebuild + test runs: 306/306.
+- **Prevention:** Same rule as E-001/E-005, now applied to the healthcheck tests: only timing tests run on timing budgets.
+
+<!-- Add new errors above this line, continuing from E-014. -->
 
 ---
 
@@ -336,7 +386,28 @@ Evidence for the brief's "AI Engineering & Verification" criterion. Record **eve
 - **How it was caught:** D3.1's automated test rendered events with the production JSON formatter and failed immediately.
 - **Correction:** Invariant 7 is now proven by tests over the exact exported shape (log JSON, span tags, Prometheus text). Lesson: verify privacy against what leaves the process, not against a human-readable view.
 
-<!-- Add new AI corrections above this line, continuing from AI-009. -->
+### AI-009: Agent wrote README facts before checking them
+- **Date / phase:** 2026-10-28 · docs
+- **AI output:** While drafting the README (D3.7), Claude Code listed the Prometheus metrics as `docviewer_search_*`, `docviewer_source_*`, `docviewer_cache_*`. There is no `docviewer_search_*` metric; the real names are `docviewer_source_requests_total`, `docviewer_partial_responses_total`, `docviewer_stale_served_total`, etc.
+- **Problem:** A reviewer following the README would look for metrics that do not exist. Plausible-looking names are the easiest hallucination to miss.
+- **How it was caught:** The agent checked every concrete name in the draft against the running API (`GET /metrics`) and the source before closing the task.
+- **Correction:** README lists the real names. Every output example in the README was captured from a real run in the same session, not written by hand.
+
+### AI-010: Agent-written tests that passed without testing the failure they named
+- **Date / phase:** 2026-10-28 · testing
+- **AI output:** (a) `Probe_ExitCodeFollowsStatus(503 → 1)` (previous session) passed even when the probe timed out instead of reading the 503. (b) This session's `DatabaseDown_ReadyzIsDegraded…` used a refused port, so the real outage (a hang) still broke the container healthcheck. (c) A first attempt to simulate a hanging database with a SQLite connection interceptor passed for "Healthy": SQLite's `CanConnect` only checks the file and never opens a connection.
+- **Problem:** Green tests that would stay green with the bug present.
+- **How it was caught:** (a) cold-run failure investigated with instrumentation instead of rerunning until green; (b) the real Docker scenario; (c) the new test failed against code that should have passed it, and the agent checked why before changing anything.
+- **Correction:** E-012, E-013. Tests now assert the evidence (WireMock's logged status; a connect task that never completes).
+
+### AI-011: Agent assumed a launch profile sets the Blazor WebAssembly environment
+- **Date / phase:** 2026-10-28 · implementation
+- **AI output:** A `mock` launch profile with `ASPNETCORE_ENVIRONMENT=Mock`, documented as the way to start mock mode.
+- **Problem:** In .NET 10 the WebAssembly environment is fixed at build time by `WasmApplicationEnvironmentName` (default `Development`); the profile did nothing. It was also first "verified" against port 5173, which the Docker `web` container was serving.
+- **How it was caught:** No `Blazor-Environment` header, then the installed SDK's `Microsoft.NET.Sdk.WebAssembly.Browser.targets`, then the boot config (`"applicationEnvironment": "Mock"`) of a build with the property.
+- **Correction:** Profile removed; docs use `-p:WasmApplicationEnvironmentName=Mock`. Lesson: check which server answered before trusting a check.
+
+<!-- Add new AI corrections above this line, continuing from AI-012. -->
 
 ---
 
@@ -346,7 +417,7 @@ Evidence for the brief's "AI Engineering & Verification" criterion. Record **eve
 |---|---|---|---|
 | Q1 | Do we need pagination for very long histories, or is a single list fine for the demo? | Kumar | Open — backlog |
 | Q2 | Should stale fallback be disabled by config for audit-sensitive dealers? | Kumar | Open |
-| Q3 | `/readyz` returns 503 when the database is down (DESIGN §7.1), but searches still work without it (invariant 10). Should readiness report DB loss as *degraded* (200) so a DB blip does not pull every instance from the load balancer? | Kumar | Open — implemented as designed (503) until decided |
+| Q3 | `/readyz` returns 503 when the database is down (DESIGN §7.1), but searches still work without it (invariant 10). Should readiness report DB loss as *degraded* (200) so a DB blip does not pull every instance from the load balancer? | Kumar | Closed 2026-10-28 — *degraded* (200), D-024 |
 | R1 | Per-process breaker state across replicas (D-007) | — | Accepted risk |
 | R2 | Duplicate heuristic false positives (D-009) | — | Accepted risk, tested |
 

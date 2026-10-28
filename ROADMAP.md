@@ -15,9 +15,9 @@
 | Field | Value |
 |---|---|
 | Active day | Day 3 |
-| Next task | D3.7 README + design doc finalisation; D3.3 needs only a Jaeger UI screenshot |
+| Next task | Kumar: review + commit (nothing committed this session); then real fresh-clone check closes D3.7; browser pass over the UI closes D4.6; Jaeger screenshot closes D3.3. Then D5.4 (k6) |
 | Blockers | None |
-| Last updated | 2026-10-27 (D2.4–D3.6 session; 230 tests green) |
+| Last updated | 2026-10-28 (D3.7–D5.3 session; 306 tests green) |
 
 ## Progress Summary
 
@@ -26,9 +26,9 @@
 | Day 0 — Planning | 6 | 6 | `[x]` |
 | Day 1 — Foundations: solution, domain, mocks, adapters | 7 | 7 | `[x]` |
 | Day 2 — Aggregation, resilience, cache, persistence, API | 7 | 7 | `[x]` |
-| Day 3 — Observability, packaging, docs (**submission-ready**) | 7 | 5 (+D3.3 partial) | `[~]` |
-| Day 4 — Frontend demo client | 6 | 0 | `[ ]` |
-| Day 5 — Smart features, hardening, video | 7 | 0 | `[ ]` |
+| Day 3 — Observability, packaging, docs (**submission-ready**) | 7 | 5 (+D3.3, D3.7 partial) | `[~]` |
+| Day 4 — Frontend demo client (Blazor, D-025) | 6 | 5 (+D4.6 partial) | `[~]` |
+| Day 5 — Smart features, hardening, video | 7 | 3 | `[~]` |
 
 **Plan shape:** Days 1–3 build the complete, gradable submission (core backend, tests, docs, Docker). Days 4–5 are extra development that make it stand out. If time runs short, the submission at the end of Day 3 must already be complete.
 
@@ -148,33 +148,39 @@ Goal: **submission-ready.** Everything the brief requires exists and runs from a
 - [x] **D3.6 CI** — `.github/workflows/ci.yml`: setup-dotnet 10, restore, build (warnings as errors), `dotnet format --verify-no-changes`, test + coverage, OpenAPI drift.
   - ✅ Green run on GitHub.
 
-- [ ] **D3.7 README and design doc finalisation** — README: overview, prerequisites, quick start (Docker and `dotnet run`), tests, cURL/`.http` demo, fault-injection demo, layout, **AI Collaboration Narrative** (strategy, verification, quality — from SYSTEMS.md §4 and the Session Log). DESIGN.md §19 refreshed; version 1.0.
-  - ✅ A reviewer can build, run and test from the README alone (verified on a fresh clone).
+- [~] **D3.7 README and design doc finalisation** — README: overview, prerequisites, quick start (Docker and `dotnet run`), tests, cURL/`.http` demo, fault-injection demo, layout, **AI Collaboration Narrative** (strategy, verification, quality — from SYSTEMS.md §4 and the Session Log). DESIGN.md §19 refreshed; version 1.0.
+  - ✅ A reviewer can build, run and test from the README alone (verified on a fresh clone). — _README, frontend/README, DESIGN §19 and v1.0 done; every README output captured from a real run. Verified on a clean copy of the working tree (build 0 warnings, 306/306 twice from cold). A real `git clone` check waits for Kumar's commit._
 
 **Day 3 exit check:** brief deliverables 1 and 2 complete · tag `v1.0-submission`.
 
 ---
 
-## Day 4 — Frontend demo client (extra) `[ ]`
+## Day 4 — Frontend demo client (extra) `[~]`
 
-Goal: a polished UI that shows the full user experience against the real API (or MSW mocks).
+Goal: a polished UI that shows the full user experience against the real API (or its built-in mock mode). Blazor WebAssembly, decided 2026-10-28 (D-025; replaces the React plan).
 
-- [ ] **D4.1 Scaffold** — Vite + React + TS + Tailwind + TanStack Query + Vitest; typed API client generated from `docs/openapi.json` (`openapi-typescript`).
-- [ ] **D4.2 Search** — VIN input with live format hints, normalisation, recent searches (localStorage), deep link `/?vin=`.
-- [ ] **D4.3 Results** — merged table/cards; colour-coded **source badges**; status chips (Expired / Expiring soon); duplicate & conflict icons with tooltips; summary counts.
-- [ ] **D4.4 States** — loading skeleton, empty state, 400 inline error, **partial banner** naming the failed source, **stale banner** with "as of" time, 503 retry screen, trace id shown for support.
-- [ ] **D4.5 MSW mock mode** — `VITE_USE_MOCKS=true` runs the UI without the backend, with handlers for every state above.
-- [ ] **D4.6 Tests + compose** — Vitest/Testing Library for banners and badges; UI service added to compose; CORS verified.
+- [x] **D4.1 Scaffold** — `frontend/DocViewer.Web` (Blazor WASM standalone, :5173) referencing `DocViewer.Domain`; `tests/DocViewer.Web.Tests` (bUnit, xUnit, Shouldly); typed `DocumentsApiClient` over `HttpClient` with a source-generated `JsonSerializerContext`; wire DTOs checked against `docs/openapi.json` by a test.
+  - ✅ `dotnet build` 0 warnings; a contract test fails if a DTO property is not in the OpenAPI schema.
+- [x] **D4.2 Search** — VIN input with live format hints from `Vin.TryParse`, normalisation (trim, upper case), recent searches (localStorage, failures ignored), deep link `/?vin=`.
+  - ✅ bUnit: hint text for 16 chars / `O`; submit disabled until valid; deep link triggers a search; recent list updates.
+- [x] **D4.3 Results** — merged table; colour-coded **source badges**; status chips (Expired / Expiring soon); duplicate & conflict icons with tooltips; summary counts.
+  - ✅ bUnit: one badge per document with its source; chips and flag icons render per status/flag.
+- [x] **D4.4 States** — loading skeleton, empty state, 400 inline error, **partial banner** naming the failed source, **stale banner** with "as of" time, 503 retry screen, trace id shown for support.
+  - ✅ bUnit test per state.
+- [x] **D4.5 Mock mode** — `Api:UseMocks=true` serves canned responses for every state above from an in-process handler (no backend needed).
+  - ✅ Tests run the page against the mock handler; README documents the demo VINs.
+- [~] **D4.6 Tests + compose** — UI image (SDK publish → `nginx:alpine`) and `web` service on :5173; CORS verified against the running API.
+  - ✅ `docker compose up --build` → UI loads and searches the real API. — _verified over HTTP: UI 200 on :5173 incl. deep links, API answers the UI origin with CORS + exposed headers, mock admin preflight allowed. Not yet clicked through in a browser (no browser tool in the agent session)._
 
 **Day 4 exit check:** UI demo of normal, partial, stale and invalid flows · commit `day4: frontend`.
 
 ---
 
-## Day 5 — Smart features, hardening, video (extra) `[ ]`
+## Day 5 — Smart features, hardening, video (extra) `[~]`
 
-- [ ] **D5.1 Expiry alerts** — summary banner "1 expired, 1 expiring in 10 days"; filter by status (server-side filters already exist).
-- [ ] **D5.2 Source health panel** — UI panel from `/api/v1/sources/health` showing circuit state and latency; failure demo toggles that call the mocks' `/__admin/fault`.
-- [ ] **D5.3 Filters** — by source and type in the UI, synced to URL query.
+- [x] **D5.1 Expiry alerts** — summary banner "1 expired, 1 expiring in 10 days"; filter by status (server-side filters already exist).
+- [x] **D5.2 Source health panel** — UI panel from `/api/v1/sources/health` showing circuit state and latency; failure demo toggles that call the mocks' `/__admin/fault` (mocks allow the UI origin on `/__admin` only).
+- [x] **D5.3 Filters** — by source and type in the UI, synced to URL query.
 - [ ] **D5.4 Load test** — k6 script (`infra/k6/search.js`), results table in README; verify p95 targets and breaker behaviour under induced failure.
 - [ ] **D5.5 Real-Postgres tests** — Testcontainers PostgreSQL job for the repository and migrations (catches SQLite/Postgres differences); log any differences found.
 - [ ] **D5.6 Final review** — `/code-review` pass on the whole repo, security review (no VIN in logs, no secrets), update docs, re-tag `v1.1`.
@@ -200,6 +206,9 @@ Newest first. One entry per working session. Keep each entry short.
 
 | Date | Agent / person | Tasks touched | Outcome | Notes / next step |
 |---|---|---|---|---|
+| 2026-10-28 | Claude Code (with Kumar) | Q3, D3.7, D4.1–D4.6, D5.1–D5.3 | Kumar decided: Q3 → *degraded* (D-024), Blazor WASM (D-025), no commits. README written (PowerShell + bash, tables from real runs, AI narrative); DESIGN v1.0. Blazor client with mock mode, health panel + fault toggles, URL filters, expiry alert; nginx `web` service. Fixed in Docker: API went `unhealthy` with Postgres stopped (E-012). Found the cause of the cold-run flake (E-013, solves E-011). 306 tests green (Web 58), 0 warnings, format clean; coverage Domain 99.0 %, Application 98.4 %, Infra 94.1 %, Api 93.9 %, Web 89.9 %. New: D-024, D-025, E-011…E-013, AI-009…AI-011. | Nothing committed. Kumar: review + commit/push, then fresh-clone check (D3.7), browser pass at :5173 (D4.6), Jaeger screenshot (D3.3). AGENTS.md still describes a TypeScript frontend (§6, §11): Kumar to approve an update. Next task: D5.4 k6. |
+| 2026-10-28 | Claude Code (with Kumar) | Handover | Uncommitted on disk: `ContainerHealthCheck.cs` + tests, compose healthcheck, DESIGN/SYSTEMS/ROADMAP updates. Open questions for Kumar: Q3 (readiness semantics; agent recommends 'degraded' = 200), React vs Blazor for Day 4 (never answered), repo is private. For D3.7 README: Windows PowerShell's `curl` is an alias of Invoke-WebRequest; show `curl.exe` or `Invoke-RestMethod` examples, plus a human-readable table view (`$r.documents \| Format-Table source, type, title, date, expiryDate, status`). Kumar found raw JSON hard to read: explain outputs in plain tables. | Next: ask about commit/push, then D3.7. |
+| 2026-10-27 | Claude Code (with Kumar) | API container healthcheck | `--healthcheck` mode + compose healthcheck (D-023); 8 tests; verified in Docker: healthy → unhealthy with Postgres stopped → healthy. Unreproduced cold-start 503 logged (E-010). | Next: D3.7 README; decide Q3 (readiness semantics). |
 | 2026-10-27 | Claude Code (with Kumar) | D1.1, D3.4–D3.6 | First commit pushed to private repo kumarabhik/keyloop-document-viewer; first CI run green (build, format, tests + coverage gate, OpenAPI drift, Docker build); fresh clone → `docker compose up --build` → demo works without a .env. | Next: D3.7 README; Jaeger screenshot for D3.3. Optional: bump actions to Node 24 versions (deprecation warning only). |
 | 2026-10-27 | Claude Code (with Kumar) | D2.4–D3.6 | Day 2 done; D3.1–D3.2 done; D3.3–D3.6 built and verified, each waiting on commit/push or a screenshot. 230 tests green, 0 warnings, format clean. Coverage: Domain 99.0 %, Application 98.4 %, Infrastructure 93.3 %, Api 93.7 %. Docker stack verified end to end (Postgres, Redis, Jaeger trace, Prometheus, Grafana). Found and fixed a raw-VIN leak in log scopes and span URLs (E-007). New: D-020…D-022, E-005…E-009, AI-008, Q3. | Next: D3.7 README. Ask Kumar: first commit + push (closes D1.1, D3.5, D3.6), Q3 readiness semantics. |
 | 2026-10-27 | Claude Code (with Kumar) | D1.1–D2.3 | 9 tasks done, D1.1 awaiting commit. 169 tests green, 0 warnings. Coverage: Domain 99 %, Application 80 %, Infrastructure 76 %. New: D-018, D-019, E-001…E-004, AI-007. | Next: D2.4 AggregationService. Ask Kumar about the first commit. |
