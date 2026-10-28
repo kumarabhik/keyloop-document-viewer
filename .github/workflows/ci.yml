@@ -74,3 +74,34 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build API, mock and UI images
         run: docker compose build api sales-mock service-mock web
+
+  # D-026: generated requests against the real API, checked against the committed contract (docs/openapi.json).
+  # negative_data_rejection is excluded on purpose: the API accepts more spellings than it advertises (D-021).
+  contract-fuzz:
+    name: Contract fuzzing (Schemathesis)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start API, mocks, Postgres and Redis
+        run: docker compose up --build --detach --wait api
+      - name: Fuzz the API against docs/openapi.json
+        run: |
+          mkdir -p schemathesis-report
+          docker run --rm --network docviewer_default \
+            -v "$PWD/docs:/docs:ro" -v "$PWD/schemathesis-report:/report" \
+            schemathesis/schemathesis:4.31.1 run /docs/openapi.json \
+            --url http://api:8080 --checks all --exclude-checks negative_data_rejection \
+            --max-time 90 --workers 2 --report junit --report-dir /report
+      - name: API logs on failure
+        if: failure()
+        run: docker compose logs api --tail 200
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: schemathesis-report
+          path: schemathesis-report
+          if-no-files-found: ignore
+      - name: Stop the stack
+        if: always()
+        run: docker compose down --volumes

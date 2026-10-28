@@ -34,7 +34,7 @@ builder.Services.AddOpenApi(o => o.AddDocumentTransformer((document, _, _) =>
         "One VIN search across the dealership's Sales and Service systems. Every document names its source; " +
         "a failing source makes the response partial (200), never an error.";
     return Task.CompletedTask;
-}));
+}).AddOperationTransformer<DocumentParametersTransformer>().AddSchemaTransformer<OptionalWhenNullSchemaTransformer>());
 
 builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>(
     DatabaseHealthCheck.Name, failureStatus: HealthStatus.Degraded, tags: ["ready"], timeout: DatabaseHealthCheck.Timeout);

@@ -21,6 +21,7 @@
             "description": "17-character VIN; case-insensitive, surrounding spaces ignored. Letters I, O and Q are not allowed.",
             "required": true,
             "schema": {
+              "pattern": "^[A-HJ-NPR-Z0-9]{17}$",
               "type": "string"
             }
           },
@@ -31,6 +32,10 @@
             "schema": {
               "type": "array",
               "items": {
+                "enum": [
+                  "SALES",
+                  "SERVICE"
+                ],
                 "type": "string"
               }
             }
@@ -42,6 +47,16 @@
             "schema": {
               "type": "array",
               "items": {
+                "enum": [
+                  "INVOICE",
+                  "RC",
+                  "INSURANCE",
+                  "PUC",
+                  "WARRANTY",
+                  "JOB_CARD",
+                  "SERVICE_HISTORY",
+                  "OTHER"
+                ],
                 "type": "string"
               }
             }
@@ -53,6 +68,12 @@
             "schema": {
               "type": "array",
               "items": {
+                "enum": [
+                  "NOT_APPLICABLE",
+                  "VALID",
+                  "EXPIRING_SOON",
+                  "EXPIRED"
+                ],
                 "type": "string"
               }
             }
@@ -426,8 +447,7 @@
           "status",
           "latencyMs",
           "count",
-          "asOf",
-          "error"
+          "asOf"
         ],
         "type": "object",
         "properties": {

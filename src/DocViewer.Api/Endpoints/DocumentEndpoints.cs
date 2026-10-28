@@ -14,12 +14,14 @@ internal static class DocumentEndpoints
 {
     public const string CacheHeader = "X-Cache";
 
+    public const string GetDocumentsOperation = "GetVehicleDocuments";
+
     public static RouteGroupBuilder MapDocumentEndpoints(this IEndpointRouteBuilder app)
     {
         var api = app.MapGroup("/api/v1").WithTags("Documents");
 
         api.MapGet("/vehicles/{vin}/documents", GetDocumentsAsync)
-            .WithName("GetVehicleDocuments")
+            .WithName(GetDocumentsOperation)
             .WithSummary("Documents for a vehicle from all source systems")
             .WithDescription(
                 "Calls the Sales and Service systems in parallel and returns one merged list. Each document names its source. " +

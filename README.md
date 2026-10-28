@@ -281,7 +281,7 @@ After about five failures in ten seconds, a source's circuit breaker opens (`cir
 
 ```bash
 dotnet build                          # warnings are errors; also regenerates docs/openapi.json
-dotnet test                           # all test projects (312 tests, ~1–2 min; needs Docker for 6 of them)
+dotnet test                           # all test projects (320 tests, ~1–2 min; needs Docker for 6 of them)
 dotnet format --verify-no-changes     # style check
 ```
 
@@ -309,7 +309,7 @@ Each invariant in [SYSTEMS.md §6](SYSTEMS.md#6-invariants) has a test tagged `[
 dotnet test --filter "Invariant=4"     # e.g. partial responses are never cached
 ```
 
-CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs build, format, tests with the coverage gate, the OpenAPI drift check and the Docker image build on every push.
+CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs build, format, tests with the coverage gate, the OpenAPI drift check, the Docker image build and **contract fuzzing** (Schemathesis sends generated requests to the running stack and checks every answer against `docs/openapi.json`, D-026) on every push.
 
 ### 7.1 Load test (k6)
 
@@ -399,12 +399,13 @@ The whole project was built with AI assistance: a chat assistant for the first-p
 | AI-009 | README listed metric names nobody had checked | Reviewers would look for metrics that do not exist | Every name checked against the running `/metrics` |
 | AI-010 | Tests that stayed green with the bug present (a 503 test passing by timeout; a DB-down test that only covered instant refusals) | False confidence; a real outage still broke the Docker healthcheck | Cold-run failure instrumented; real Docker outage |
 | AI-011 | A launch profile to switch the Blazor environment | Has no effect in .NET 10 (build-time property) | Response headers, then the SDK's own targets file |
+| AI-012 | Generated OpenAPI spec trusted because it cannot drift | It required a field healthy responses omit (E-016) | Contract fuzzing |
 
 ### 10.4 Quality: what the process produced
 
-- 312 automated tests; coverage Domain 99 %, Application 98 %, Infrastructure 94 %, Api 94 %, Web 90 % (gate: 85 % on Domain + Application).
+- 320 automated tests plus contract fuzzing in CI; coverage Domain 99 %, Application 98 %, Infrastructure 94 %, Api 94 %, Web 90 % (gate: 85 % on Domain + Application).
 - Every invariant in SYSTEMS.md §6 is guarded by a tagged test; every row of the failure matrix (DESIGN §6.3) is automated.
-- 25 recorded decisions, 15 recorded errors and 11 AI corrections, each dated and linked to code and tests.
+- 26 recorded decisions, 16 recorded errors and 12 AI corrections, each dated and linked to code and tests.
 - The submission runs from a clean clone with one command and no secrets.
 
 **What I learned about working with an agent:** it is fast and thorough when the target is written down and checkable, and it is most dangerous when it is confident about something nobody checked — a library default, a log format, a stack choice. The process above exists to turn those cases into failing tests or explicit questions as early as possible.

@@ -187,7 +187,14 @@ The project's memory. If it matters later, it goes here. Every agent and every h
 - **Alternatives:** React (needs Node, a second language); NSwag/Kiota client generation (one more build-time dependency for five DTOs); Blazor Server (needs a server connection per user).
 - **Consequences:** WASM first load is a few MB (17 MB uncompressed; nginx serves the pre-compressed files). Mock mode is chosen at build time (`-p:WasmApplicationEnvironmentName=Mock`, AI-011). Mocks get a CORS policy for the UI origin so the health panel can flip `/__admin/fault` (demo only).
 
-<!-- Add new decisions above this line, continuing from D-026. -->
+### D-026: Contract fuzzing in CI; the spec states the canonical input, the API stays lenient
+- **Date:** 2026-10-28 · **Status:** Accepted · Backlog item chosen by Kumar
+- **Context:** Schemathesis generates requests from `docs/openapi.json` and checks the answers. Its first run showed the spec allowed any string as a VIN, so a rejected `0` looked like a bug.
+- **Decision:** (1) `DocumentParametersTransformer` adds the canonical VIN pattern `^[A-HJ-NPR-Z0-9]{17}$` and the filter enums (built from the Domain enums the API parses). (2) `OptionalWhenNullSchemaTransformer` drops `WhenWritingNull` properties from `required` (E-016). (3) CI job `contract-fuzz`: compose stack + `schemathesis/schemathesis:4.31.1`, all checks except `negative_data_rejection`, 90 s, JUnit report artifact.
+- **Alternatives:** make the API strict (breaks D-021 leniency: lower case, spaces, comma lists, empty filter); encode the leniency as case-insensitive regexes (unreadable contract); fuzz without the negative-check exclusion (it flags only `?source=`, verified with a dedicated run).
+- **Consequences:** Clients see what to send; the API accepts a little more. Rejection of bad input stays covered by our own tests (invariant 6). Fuzzing is random: a CI failure prints a seed and a `curl` to reproduce.
+
+<!-- Add new decisions above this line, continuing from D-027. -->
 
 ---
 
@@ -306,7 +313,14 @@ Record anything that cost more than ~15 minutes, would bite someone again, or ch
 - **Fix:** Postgres tests compare the parsed JSON. Production code only writes this column and never compares its text, so behaviour is unaffected. Everything else matched: migrations apply with nothing pending, both JSON columns are `jsonb`, `timestamptz` round-trips the exact `DateTimeOffset`, array order and non-ASCII text survive, upsert keeps one row, the 24 h age limit is inclusive.
 - **Prevention:** `PostgresPersistenceTests` (6 tests, Testcontainers, `postgres:16-alpine`) run in CI; skipped with a reason where Docker is missing. Rule: assert on parsed JSON, never on JSON text, for anything stored in `jsonb`.
 
-<!-- Add new errors above this line, continuing from E-016. -->
+### E-016: OpenAPI schema required `sources[].error`, which healthy responses leave out
+- **Date:** 2026-10-28 · **Task:** contract fuzzing (D-026) · **Severity:** medium (contract)
+- **Symptom:** Schemathesis: "Response violates schema — 'error' is a required property" on an ordinary 200 (`{"name":"SALES","status":"ok",…,"asOf":null}`).
+- **Root cause:** `SourceStatusResponse.Error` is serialised with `JsonIgnoreCondition.WhenWritingNull` (intended, DESIGN §7.2), but the OpenAPI generator marks every positional-record parameter as required and ignores that condition. A client generated from the spec could reject every healthy response. The 238+ existing tests never compared responses with the schema.
+- **Fix:** `OptionalWhenNullSchemaTransformer` (generic: any `WhenWritingNull`/`WhenWritingDefault` property). Re-run: 1 390 generated requests, 0 failures.
+- **Prevention:** `OpenApiContractTests` and the `contract-fuzz` CI job.
+
+<!-- Add new errors above this line, continuing from E-017. -->
 
 ---
 
@@ -421,7 +435,14 @@ Evidence for the brief's "AI Engineering & Verification" criterion. Record **eve
 - **How it was caught:** No `Blazor-Environment` header, then the installed SDK's `Microsoft.NET.Sdk.WebAssembly.Browser.targets`, then the boot config (`"applicationEnvironment": "Mock"`) of a build with the property.
 - **Correction:** Profile removed; docs use `-p:WasmApplicationEnvironmentName=Mock`. Lesson: check which server answered before trusting a check.
 
-<!-- Add new AI corrections above this line, continuing from AI-012. -->
+### AI-012: Agent treated "generated, so it cannot drift" as "correct"
+- **Date / phase:** 2026-10-28 · testing
+- **AI output:** Since D3.5 the docs said the spec "is a build output so it never drifts" (DESIGN §14), and the agent treated `docs/openapi.json` as the verified contract.
+- **Problem:** Never drifting from the code is not the same as describing the code correctly. The generated schema required a field the API omits (E-016) and did not state the VIN format at all.
+- **How it was caught:** Contract fuzzing (Kumar's backlog choice) on its first and second runs.
+- **Correction:** D-026: transformers fix the spec, tests pin the findings, fuzzing runs in CI. Lesson: check generated artefacts against real behaviour, not only against their generator.
+
+<!-- Add new AI corrections above this line, continuing from AI-013. -->
 
 ---
 

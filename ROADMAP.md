@@ -191,7 +191,7 @@ Goal: a polished UI that shows the full user experience against the real API (or
 ## Backlog (only if time remains)
 
 - [ ] .NET Aspire AppHost: one-click local orchestration with the Aspire dashboard (logs, traces, metrics).
-- [ ] Contract fuzzing of the API against `docs/openapi.json` (e.g. Schemathesis in CI).
+- [x] Contract fuzzing of the API against `docs/openapi.json` (e.g. Schemathesis in CI). — _2026-10-28: `contract-fuzz` CI job (D-026). Found and fixed a schema bug (E-016); spec now states the VIN pattern and filter enums. Local run: 1 390 requests, 0 issues._
 - [ ] Pagination for long histories (`limit`/`cursor`).
 - [ ] Shared circuit-breaker state across replicas.
 - [ ] Background refresh of stale sources via a queue.
