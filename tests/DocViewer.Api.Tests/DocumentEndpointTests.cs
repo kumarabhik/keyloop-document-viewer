@@ -1,5 +1,10 @@
 using System.Net;
 using System.Text.Json.Nodes;
+using DocViewer.Api.Http;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
 
 namespace DocViewer.Api.Tests;
 
@@ -257,6 +262,36 @@ public sealed class DocumentEndpointTests : IDisposable
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         (await response.Content.ReadAsStringAsync()).ShouldBe("Healthy");
+    }
+
+    [Fact]
+    [Trait("Invariant", "10")]
+    public async Task DatabaseDown_ReadyzIsDegraded_AndSearchStillSucceeds()
+    {
+        BothSourcesHealthy();
+        // Nothing listens on port 1, so every database call is refused at once (D-024).
+        using var factory = _factory.WithWebHostBuilder(b => b
+            .UseSetting("Persistence:Provider", "Postgres")
+            .UseSetting("ConnectionStrings:DocViewer", "Host=127.0.0.1;Port=1;Timeout=1;Username=x;Password=x;Database=x"));
+        using var client = factory.CreateClient();
+
+        var ready = await client.GetAsync(new Uri("/readyz", UriKind.Relative));
+        var search = await client.GetAsync(new Uri(DocumentsPath(), UriKind.Relative));
+
+        ready.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await ready.Content.ReadAsStringAsync()).ShouldBe("Degraded");
+        search.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public void DatabaseCheck_TimesOutFastAsDegraded_SoTheContainerProbeNeverWaitsOnTheDatabase()
+    {
+        var registration = _factory.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations
+            .Single(r => r.Name == DatabaseHealthCheck.Name);
+
+        registration.FailureStatus.ShouldBe(HealthStatus.Degraded);
+        registration.Timeout.ShouldBe(TimeSpan.FromSeconds(1));
+        registration.Timeout.ShouldBeLessThan(TimeSpan.FromSeconds(3)); // ContainerHealthCheck's probe timeout (D-023)
     }
 
     [Fact]

@@ -6,7 +6,13 @@ using DocViewer.Api.Observability;
 using DocViewer.Application;
 using DocViewer.Infrastructure;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Scalar.AspNetCore;
+
+if (ContainerHealthCheck.IsRequested(args))
+{
+    return await ContainerHealthCheck.RunAsync(args); // Docker HEALTHCHECK; never starts the app
+}
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.UseBuildTimePlaceholders();
@@ -30,7 +36,8 @@ builder.Services.AddOpenApi(o => o.AddDocumentTransformer((document, _, _) =>
     return Task.CompletedTask;
 }));
 
-builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database", tags: ["ready"]);
+builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>(
+    DatabaseHealthCheck.Name, failureStatus: HealthStatus.Degraded, tags: ["ready"], timeout: DatabaseHealthCheck.Timeout);
 
 var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
@@ -60,3 +67,4 @@ app.MapPrometheusScrapingEndpoint(); // GET /metrics
 
 await StartupTasks.InitializeDatabaseAsync(app);
 await app.RunAsync();
+return 0;
