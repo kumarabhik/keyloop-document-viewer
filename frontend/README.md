@@ -28,7 +28,7 @@ The API address and the mocks' fault-switch addresses are in [`DocViewer.Web/www
 
 ## Mock mode demo VINs
 
-Mock mode answers every request from an in-process handler ([`Api/MockApiHandler.cs`](DocViewer.Web/Api/MockApiHandler.cs)), the role MSW plays in a JavaScript app. The fault switches in the health panel work in mock mode too.
+Mock mode answers every request from an in-process handler ([`Api/MockApiHandler.cs`](DocViewer.Web/Api/MockApiHandler.cs)), the role MSW plays in a JavaScript app. The fault switches in the health panel work in mock mode too; after you set one back to *Healthy*, the circuit shows *Half-open* until the next search.
 
 | VIN | State |
 |---|---|
@@ -40,6 +40,8 @@ Mock mode answers every request from an in-process handler ([`Api/MockApiHandler
 | `MA3EWB81S00100011` | Partial: Service timed out |
 | `MA3EWB81S00100012` | Stale: Service served from its saved copy |
 | `MA3EWB81S00100013` | 503: both systems down |
+| `MA3EWB81S00100014` | Service circuit open: "paused after repeated failures" |
+| any VIN, searched twice within 60 s | Second answer is a cache `HIT` ("From cache") |
 | `BADVIN` | Invalid: hint only, no request sent |
 
 ## Tests
