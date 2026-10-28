@@ -281,7 +281,7 @@ After about five failures in ten seconds, a source's circuit breaker opens (`cir
 
 ```bash
 dotnet build                          # warnings are errors; also regenerates docs/openapi.json
-dotnet test                           # all test projects (306 tests, ~1 min)
+dotnet test                           # all test projects (312 tests, ~1–2 min; needs Docker for 6 of them)
 dotnet format --verify-no-changes     # style check
 ```
 
@@ -298,7 +298,7 @@ The HTML report lands in `TestResults/coverage/report/index.html`.
 |---|---|
 | `DocViewer.Domain.Tests` | VIN rules, expiry status boundaries, sort tie-breaks, duplicate vs conflict |
 | `DocViewer.Application.Tests` | Aggregation: partial, stale, both down, never caching partials, parallel fan-out, single-flight |
-| `DocViewer.Infrastructure.Tests` | Adapters against WireMock (mapping, `dd/MM/yyyy`, malformed records), Polly timing (timeout ⇒ no retry; 503 ⇒ one retry; breaker opens), cache and EF Core |
+| `DocViewer.Infrastructure.Tests` | Adapters against WireMock (mapping, `dd/MM/yyyy`, malformed records), Polly timing (timeout ⇒ no retry; 503 ⇒ one retry; breaker opens), cache, EF Core on SQLite **and on a real PostgreSQL container** (migrations, `jsonb`, upserts; skipped without Docker or with `DOCVIEWER_SKIP_POSTGRES_TESTS=1`) |
 | `DocViewer.Api.Tests` | HTTP contract end to end, ProblemDetails, filters, headers, **no raw VIN in logs/spans/metrics**, readiness when the DB is down |
 | `Mocks.Tests` | Seed scenarios and every fault mode |
 | `DocViewer.Web.Tests` | Demo UI with bUnit: source badges, partial/stale banners, every page state, URL filters, contract drift vs `openapi.json` |
@@ -402,9 +402,9 @@ The whole project was built with AI assistance: a chat assistant for the first-p
 
 ### 10.4 Quality: what the process produced
 
-- 306 automated tests; coverage Domain 99 %, Application 98 %, Infrastructure 94 %, Api 94 %, Web 90 % (gate: 85 % on Domain + Application).
+- 312 automated tests; coverage Domain 99 %, Application 98 %, Infrastructure 94 %, Api 94 %, Web 90 % (gate: 85 % on Domain + Application).
 - Every invariant in SYSTEMS.md §6 is guarded by a tagged test; every row of the failure matrix (DESIGN §6.3) is automated.
-- 25 recorded decisions, 13 recorded errors and 11 AI corrections, each dated and linked to code and tests.
+- 25 recorded decisions, 15 recorded errors and 11 AI corrections, each dated and linked to code and tests.
 - The submission runs from a clean clone with one command and no secrets.
 
 **What I learned about working with an agent:** it is fast and thorough when the target is written down and checkable, and it is most dangerous when it is confident about something nobody checked — a library default, a log format, a stack choice. The process above exists to turn those cases into failing tests or explicit questions as early as possible.

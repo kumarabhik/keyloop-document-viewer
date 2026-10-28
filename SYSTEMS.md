@@ -299,7 +299,14 @@ Record anything that cost more than ~15 minutes, would bite someone again, or ch
 - **Fix:** None. The threshold was **not** relaxed (AGENTS.md §6).
 - **Next:** Re-run with minikube stopped. If p95 is still > 20 ms, profile the hit path (audit write, JSON serialisation, logging) and consider `ThreadPool.SetMinThreads` only with measurements.
 
-<!-- Add new errors above this line, continuing from E-015. -->
+### E-015: SQLite and PostgreSQL store the audit JSON differently (found by D5.5)
+- **Date:** 2026-10-28 · **Task:** D5.5 · **Severity:** low (test-only)
+- **Symptom:** On PostgreSQL, `search_audit.source_status` reads back as `{"Sales": "Ok", "Service": "Timeout"}`; the SQLite suite asserts the exact text `"Service":"Timeout"`, which fails on Postgres (checked with a temporary assertion, then removed).
+- **Root cause:** `jsonb` stores parsed JSON and re-serialises it on read (spacing, and key order is not guaranteed); SQLite `TEXT` returns the bytes written.
+- **Fix:** Postgres tests compare the parsed JSON. Production code only writes this column and never compares its text, so behaviour is unaffected. Everything else matched: migrations apply with nothing pending, both JSON columns are `jsonb`, `timestamptz` round-trips the exact `DateTimeOffset`, array order and non-ASCII text survive, upsert keeps one row, the 24 h age limit is inclusive.
+- **Prevention:** `PostgresPersistenceTests` (6 tests, Testcontainers, `postgres:16-alpine`) run in CI; skipped with a reason where Docker is missing. Rule: assert on parsed JSON, never on JSON text, for anything stored in `jsonb`.
+
+<!-- Add new errors above this line, continuing from E-016. -->
 
 ---
 

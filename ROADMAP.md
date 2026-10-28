@@ -15,9 +15,9 @@
 | Field | Value |
 |---|---|
 | Active day | Day 3 |
-| Next task | Kumar: review + commit (nothing committed this session); then real fresh-clone check closes D3.7; browser pass over the UI closes D4.6; Jaeger screenshot closes D3.3. Then D5.4 (k6) |
+| Next task | **Resume D5.5** (in progress, uncommitted — see newest Session Log row), then contract fuzzing (Schemathesis in CI), D5.6 final review, D5.7 video script. Kumar: re-run k6 with minikube stopped (E-014), browser pass at :5173 (D4.6), Jaeger screenshot (D3.3) |
 | Blockers | None |
-| Last updated | 2026-10-28 (D3.7–D5.3 session; 306 tests green) |
+| Last updated | 2026-10-28 (paused mid-D5.5; 306 tests green at last run) |
 
 ## Progress Summary
 
@@ -28,7 +28,7 @@
 | Day 2 — Aggregation, resilience, cache, persistence, API | 7 | 7 | `[x]` |
 | Day 3 — Observability, packaging, docs (**submission-ready**) | 7 | 6 (+D3.3 partial) | `[~]` |
 | Day 4 — Frontend demo client (Blazor, D-025) | 6 | 5 (+D4.6 partial) | `[~]` |
-| Day 5 — Smart features, hardening, video | 7 | 3 | `[~]` |
+| Day 5 — Smart features, hardening, video | 7 | 4 (+D5.4 partial) | `[~]` |
 
 **Plan shape:** Days 1–3 build the complete, gradable submission (core backend, tests, docs, Docker). Days 4–5 are extra development that make it stand out. If time runs short, the submission at the end of Day 3 must already be complete.
 
@@ -182,7 +182,7 @@ Goal: a polished UI that shows the full user experience against the real API (or
 - [x] **D5.2 Source health panel** — UI panel from `/api/v1/sources/health` showing circuit state and latency; failure demo toggles that call the mocks' `/__admin/fault` (mocks allow the UI origin on `/__admin` only).
 - [x] **D5.3 Filters** — by source and type in the UI, synced to URL query.
 - [~] **D5.4 Load test** — k6 script (`infra/k6/search.js`), results table in README; verify p95 targets and breaker behaviour under induced failure. — _script, `load` compose profile and README table done; breaker behaviour verified (5 slow, then 20 at 4–11 ms, all 200). Cache-hit p95 is 133 ms at 50 users vs 20 ms target (E-014, likely CPU contention from an unrelated minikube). Next: Kumar re-runs with minikube stopped._
-- [ ] **D5.5 Real-Postgres tests** — Testcontainers PostgreSQL job for the repository and migrations (catches SQLite/Postgres differences); log any differences found.
+- [x] **D5.5 Real-Postgres tests** — Testcontainers PostgreSQL job for the repository and migrations (catches SQLite/Postgres differences); log any differences found. — _6 tests on `postgres:16-alpine` via Testcontainers 4.16.0, in the normal test run (CI included); skipped with a reason without Docker. One difference found and logged: `jsonb` re-formats stored JSON (E-015)._
 - [ ] **D5.6 Final review** — `/code-review` pass on the whole repo, security review (no VIN in logs, no secrets), update docs, re-tag `v1.1`.
 - [ ] **D5.7 Video (5–10 min)** — script in `docs/video-script.md`: intro & scenario (0:30) → design walkthrough (2:00) → implementation highlights (1:30) → AI collaboration story (1:30) → live demo incl. failure toggle (2:30) → learnings & challenges (1:00). Record and upload.
 
@@ -206,6 +206,7 @@ Newest first. One entry per working session. Keep each entry short.
 
 | Date | Agent / person | Tasks touched | Outcome | Notes / next step |
 |---|---|---|---|---|
+| 2026-10-28 | Claude Code (with Kumar) | Commit/push, D3.7, AGENTS.md, D5.4, D5.5 (started) | Kumar decided: commit + push per task; k6 and Testcontainers approved; backlog = contract fuzzing only; AGENTS.md updated for Blazor. Pushed `5b60bd5`…`2a71692` to main; CI green on `1bd7ad5`. D3.7 closed after a fresh `git clone` check. D5.4: k6 script + `load` profile; breaker verified; cache-hit p95 133 ms at 50 users vs 20 ms target (E-014, open). **Paused mid-D5.5, nothing of it committed:** on disk are `Testcontainers.PostgreSql` 4.16.0 in `Directory.Packages.props` + `DocViewer.Infrastructure.Tests.csproj`, and `tests/DocViewer.Infrastructure.Tests/Persistence/Postgres/{PostgresFactAttribute,PostgresContainer,PostgresGroup}.cs` (not yet built). The Docker stack is currently running from a scratch fresh-clone folder (same project name `docviewer`). | **Exact next step:** write `PostgresPersistenceTests.cs` in that folder (`[Collection(PostgresGroup.Name)]`, `[PostgresFact]`, `ResetAsync` per test): migrations apply and `source_snapshot.documents` / `search_audit.source_status` are `jsonb`; snapshot round-trip, overwrite, per-source, max age; audit row. Expect `SourceStatusJson.ShouldContain("\"Service\":\"Timeout\"")` to fail on Postgres (jsonb normalises spacing): assert parsed JSON instead and log the difference (D-019). Then build, test, commit `D5.5`, push, watch CI. Then Schemathesis, D5.6, D5.7. |
 | 2026-10-28 | Claude Code (with Kumar) | Q3, D3.7, D4.1–D4.6, D5.1–D5.3 | Kumar decided: Q3 → *degraded* (D-024), Blazor WASM (D-025), no commits. README written (PowerShell + bash, tables from real runs, AI narrative); DESIGN v1.0. Blazor client with mock mode, health panel + fault toggles, URL filters, expiry alert; nginx `web` service. Fixed in Docker: API went `unhealthy` with Postgres stopped (E-012). Found the cause of the cold-run flake (E-013, solves E-011). 306 tests green (Web 58), 0 warnings, format clean; coverage Domain 99.0 %, Application 98.4 %, Infra 94.1 %, Api 93.9 %, Web 89.9 %. New: D-024, D-025, E-011…E-013, AI-009…AI-011. | Nothing committed. Kumar: review + commit/push, then fresh-clone check (D3.7), browser pass at :5173 (D4.6), Jaeger screenshot (D3.3). AGENTS.md still describes a TypeScript frontend (§6, §11): Kumar to approve an update. Next task: D5.4 k6. |
 | 2026-10-28 | Claude Code (with Kumar) | Handover | Uncommitted on disk: `ContainerHealthCheck.cs` + tests, compose healthcheck, DESIGN/SYSTEMS/ROADMAP updates. Open questions for Kumar: Q3 (readiness semantics; agent recommends 'degraded' = 200), React vs Blazor for Day 4 (never answered), repo is private. For D3.7 README: Windows PowerShell's `curl` is an alias of Invoke-WebRequest; show `curl.exe` or `Invoke-RestMethod` examples, plus a human-readable table view (`$r.documents \| Format-Table source, type, title, date, expiryDate, status`). Kumar found raw JSON hard to read: explain outputs in plain tables. | Next: ask about commit/push, then D3.7. |
 | 2026-10-27 | Claude Code (with Kumar) | API container healthcheck | `--healthcheck` mode + compose healthcheck (D-023); 8 tests; verified in Docker: healthy → unhealthy with Postgres stopped → healthy. Unreproduced cold-start 503 logged (E-010). | Next: D3.7 README; decide Q3 (readiness semantics). |
