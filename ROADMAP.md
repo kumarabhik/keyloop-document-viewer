@@ -181,7 +181,7 @@ Goal: a polished UI that shows the full user experience against the real API (or
 - [x] **D5.1 Expiry alerts** — summary banner "1 expired, 1 expiring in 10 days"; filter by status (server-side filters already exist).
 - [x] **D5.2 Source health panel** — UI panel from `/api/v1/sources/health` showing circuit state and latency; failure demo toggles that call the mocks' `/__admin/fault` (mocks allow the UI origin on `/__admin` only).
 - [x] **D5.3 Filters** — by source and type in the UI, synced to URL query.
-- [ ] **D5.4 Load test** — k6 script (`infra/k6/search.js`), results table in README; verify p95 targets and breaker behaviour under induced failure.
+- [~] **D5.4 Load test** — k6 script (`infra/k6/search.js`), results table in README; verify p95 targets and breaker behaviour under induced failure. — _script, `load` compose profile and README table done; breaker behaviour verified (5 slow, then 20 at 4–11 ms, all 200). Cache-hit p95 is 133 ms at 50 users vs 20 ms target (E-014, likely CPU contention from an unrelated minikube). Next: Kumar re-runs with minikube stopped._
 - [ ] **D5.5 Real-Postgres tests** — Testcontainers PostgreSQL job for the repository and migrations (catches SQLite/Postgres differences); log any differences found.
 - [ ] **D5.6 Final review** — `/code-review` pass on the whole repo, security review (no VIN in logs, no secrets), update docs, re-tag `v1.1`.
 - [ ] **D5.7 Video (5–10 min)** — script in `docs/video-script.md`: intro & scenario (0:30) → design walkthrough (2:00) → implementation highlights (1:30) → AI collaboration story (1:30) → live demo incl. failure toggle (2:30) → learnings & challenges (1:00). Record and upload.

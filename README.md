@@ -311,6 +311,27 @@ dotnet test --filter "Invariant=4"     # e.g. partial responses are never cached
 
 CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs build, format, tests with the coverage gate, the OpenAPI drift check and the Docker image build on every push.
 
+### 7.1 Load test (k6)
+
+```powershell
+docker compose up --build -d                      # the stack must be running
+docker compose --profile load run --rm k6         # 2 min at 50 users, then the breaker phase (~3 min)
+docker compose --profile load run --rm -e VUS=1 -e DURATION=30s k6   # quick single-user run
+```
+
+The script is [infra/k6/search.js](infra/k6/search.js); k6 runs in its own container, nothing to install. Results from 2026-10-28 on the author's laptop (Docker Desktop with 6 CPUs, shared with an unrelated minikube cluster using ~2 of them):
+
+| Measure | Target (DESIGN §2.2) | 1 user | 50 users | Verdict |
+|---|---|---|---|---|
+| Cache hit, p95 | < 20 ms | **7.8 ms** | **133 ms** (median 5.5 ms) | ✗ at 50 users on this machine |
+| Cache miss, p95 | < 300 ms | 44 ms | 251 ms | ✓ |
+| Errors | < 1 % | 0 % | 0 % of 11 129 requests | ✓ |
+| Throughput | — | 2 req/s | 82 req/s | — |
+
+**Breaker phase** (Service hangs, one user searches 25 times): searches 1–5 took ~1.5 s each (one attempt timeout, no retry, D-005), then the breaker opened and searches 6–25 answered in **4–11 ms** with Service's saved copy (`stale`, reason `circuit_open`). All 25 were HTTP 200 within the 2.2 s budget.
+
+In plain words: one user gets cache hits in a few milliseconds. With 50 users on this laptop most hits are still fast (median 5.5 ms), but the slowest 5 % take up to ~130 ms. The API's thread pool never queued work and GC pauses were small, so the likely cause is CPU contention inside Docker rather than the code. That is a likely explanation, not a proven one; see E-014.
+
 ## 8. Observability
 
 | Signal | Where | Notes |

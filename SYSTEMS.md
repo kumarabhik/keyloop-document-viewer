@@ -292,7 +292,14 @@ Record anything that cost more than ~15 minutes, would bite someone again, or ch
 - **Fix:** Status-mapping tests use a 30 s timeout and assert WireMock really answered with that status. Two cold rebuild + test runs: 306/306.
 - **Prevention:** Same rule as E-001/E-005, now applied to the healthcheck tests: only timing tests run on timing budgets.
 
-<!-- Add new errors above this line, continuing from E-014. -->
+### E-014: Load test misses the cache-hit p95 target at 50 users (133 ms vs 20 ms)
+- **Date:** 2026-10-28 · **Task:** D5.4 · **Severity:** medium (open)
+- **Symptom:** `search_hit_ms p(95)=132.51ms` (threshold 20 ms) over 2 min at 50 VUs; median 5.5 ms, max 1.8 s. Single user: p95 7.8 ms. Miss p95 251 ms (target 300 ms) and 0 % errors passed.
+- **Root cause:** Not proven. Evidence against the API code: thread-pool queue length 0 throughout, GC pauses ~8 ms per second. Evidence for the machine: Docker's 6-CPU VM was shared by an unrelated `minikube` container at ~200 % CPU, k6 itself (17 %), the API (60 %) and Postgres (20 %, one audit row per search, cache hits included). Thread count ramped 5 → 19 at the start, which may explain early outliers.
+- **Fix:** None. The threshold was **not** relaxed (AGENTS.md §6).
+- **Next:** Re-run with minikube stopped. If p95 is still > 20 ms, profile the hit path (audit write, JSON serialisation, logging) and consider `ThreadPool.SetMinThreads` only with measurements.
+
+<!-- Add new errors above this line, continuing from E-015. -->
 
 ---
 

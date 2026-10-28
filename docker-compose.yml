@@ -1,5 +1,6 @@
 # docker compose up --build                 → API :8080, Sales mock :8081, Service mock :8082, UI :5173, Postgres, Redis
 # docker compose --profile obs up --build   → + Prometheus :9090, Grafana :3000, Jaeger :16686
+# docker compose --profile load run --rm k6 → load test against the running stack (infra/k6/search.js, D5.4)
 # Every variable has a working default, so a clean clone runs without a .env file (see .env.example).
 name: docviewer
 
@@ -123,6 +124,18 @@ services:
     ports:
       - "16686:16686" # UI
       - "4317:4317"   # OTLP gRPC
+
+  # D5.4 load test; runs only on demand. Talks to the services by their compose names.
+  k6:
+    image: grafana/k6:1.8.1
+    profiles: [load]
+    volumes: ["./infra/k6:/scripts:ro"]
+    environment:
+      API_URL: http://api:8080
+      SALES_URL: http://sales-mock:8080
+      SERVICE_URL: http://service-mock:8080
+    command: ["run", "/scripts/search.js"]
+    depends_on: [api]
 
 volumes:
   pgdata:
