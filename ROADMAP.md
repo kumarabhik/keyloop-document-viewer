@@ -26,7 +26,7 @@
 | Day 0 — Planning | 6 | 6 | `[x]` |
 | Day 1 — Foundations: solution, domain, mocks, adapters | 7 | 7 | `[x]` |
 | Day 2 — Aggregation, resilience, cache, persistence, API | 7 | 7 | `[x]` |
-| Day 3 — Observability, packaging, docs (**submission-ready**) | 7 | 5 (+D3.3, D3.7 partial) | `[~]` |
+| Day 3 — Observability, packaging, docs (**submission-ready**) | 7 | 6 (+D3.3 partial) | `[~]` |
 | Day 4 — Frontend demo client (Blazor, D-025) | 6 | 5 (+D4.6 partial) | `[~]` |
 | Day 5 — Smart features, hardening, video | 7 | 3 | `[~]` |
 
@@ -148,8 +148,8 @@ Goal: **submission-ready.** Everything the brief requires exists and runs from a
 - [x] **D3.6 CI** — `.github/workflows/ci.yml`: setup-dotnet 10, restore, build (warnings as errors), `dotnet format --verify-no-changes`, test + coverage, OpenAPI drift.
   - ✅ Green run on GitHub.
 
-- [~] **D3.7 README and design doc finalisation** — README: overview, prerequisites, quick start (Docker and `dotnet run`), tests, cURL/`.http` demo, fault-injection demo, layout, **AI Collaboration Narrative** (strategy, verification, quality — from SYSTEMS.md §4 and the Session Log). DESIGN.md §19 refreshed; version 1.0.
-  - ✅ A reviewer can build, run and test from the README alone (verified on a fresh clone). — _README, frontend/README, DESIGN §19 and v1.0 done; every README output captured from a real run. Verified on a clean copy of the working tree (build 0 warnings, 306/306 twice from cold). A real `git clone` check waits for Kumar's commit._
+- [x] **D3.7 README and design doc finalisation** — README: overview, prerequisites, quick start (Docker and `dotnet run`), tests, cURL/`.http` demo, fault-injection demo, layout, **AI Collaboration Narrative** (strategy, verification, quality — from SYSTEMS.md §4 and the Session Log). DESIGN.md §19 refreshed; version 1.0.
+  - ✅ A reviewer can build, run and test from the README alone (verified on a fresh clone). — _README, frontend/README, DESIGN §19 and v1.0 done; every README output captured from a real run. Verified 2026-10-28 on a fresh `git clone` of `1bd7ad5` from GitHub: build 0 warnings, 306/306 on the first cold run, no OpenAPI drift, `docker compose up --build` from the clone → all services up, API healthy, search and UI work. CI green on the same commit._
 
 **Day 3 exit check:** brief deliverables 1 and 2 complete · tag `v1.0-submission`.
 
