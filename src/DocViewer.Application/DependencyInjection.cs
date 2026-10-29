@@ -17,6 +17,11 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        services.AddOptions<LatencyBudgetOptions>()
+            .BindConfiguration(LatencyBudgetOptions.SectionName)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         services.AddOptions<CacheOptions>()
             .BindConfiguration(CacheOptions.SectionName)
             .ValidateDataAnnotations()

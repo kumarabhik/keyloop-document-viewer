@@ -25,6 +25,7 @@ public sealed partial class AggregationService(
     DocViewerMetrics metrics,
     DealershipCalendar calendar,
     IOptions<BusinessRulesOptions> rules,
+    IOptions<LatencyBudgetOptions> budget,
     TimeProvider timeProvider,
     ILogger<AggregationService> logger)
 {
@@ -167,10 +168,25 @@ public sealed partial class AggregationService(
         return result;
     }
 
-    /// <summary>Stands in the last-known-good snapshot for a failed source, keeping the original error (D-003).</summary>
+    /// <summary>
+    /// Stands in the last-known-good snapshot for a failed source, keeping the original error (D-003). The read gets its
+    /// own small budget: it runs after the source has used its 2 s, and a stopped database does not always honour
+    /// cancellation, so we stop waiting ourselves (E-018, invariant 5).
+    /// </summary>
     private async Task<SourceResult> WithFallbackAsync(Vin vin, SourceResult failed)
     {
-        var snapshot = await snapshots.GetAsync(vin, failed.Source, CancellationToken.None);
+        SourceSnapshot? snapshot;
+        try
+        {
+            snapshot = await snapshots.GetAsync(vin, failed.Source, CancellationToken.None)
+                .WaitAsync(budget.Value.SnapshotReadTimeout, timeProvider);
+        }
+        catch (TimeoutException)
+        {
+            LogSnapshotReadTimedOut(logger, failed.Source, vin.Masked, budget.Value.SnapshotReadTimeoutMs);
+            return failed;
+        }
+
         return snapshot is null
             ? failed
             : failed with { Status = SourceStatus.Stale, Documents = snapshot.Documents, AsOf = snapshot.FetchedAt };
@@ -221,6 +237,10 @@ public sealed partial class AggregationService(
 
     [LoggerMessage(EventId = 1001, Level = LogLevel.Error, Message = "source.adapter_threw {Source} vin={VinMasked}")]
     private static partial void LogAdapterThrew(ILogger logger, SourceSystem source, string vinMasked, Exception exception);
+
+    [LoggerMessage(EventId = 1003, Level = LogLevel.Warning,
+        Message = "snapshot.read_timed_out {Source} vin={VinMasked} budgetMs={BudgetMs}")]
+    private static partial void LogSnapshotReadTimedOut(ILogger logger, SourceSystem source, string vinMasked, int budgetMs);
 
     [LoggerMessage(EventId = 1002, Level = LogLevel.Warning, Message = "persistence.background_failed operation={Operation}")]
     private static partial void LogBackgroundWriteFailed(ILogger logger, string operation, Exception exception);

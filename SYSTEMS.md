@@ -327,7 +327,20 @@ Record anything that cost more than ~15 minutes, would bite someone again, or ch
 - **Fix:** `log_format no_query` (method, `$uri`, protocol, status, bytes; never `$request` or `$args`) in `docker/nginx-web.conf`. Re-checked: after searches with a valid VIN, an invalid one and a deep link, 0 raw-VIN lines across all six containers' logs and `/metrics`.
 - **Prevention:** The D5.6 check (grep every container's logs after real requests) is the rule for any new container. Not automated yet: a compose-level privacy check in CI is a good next step.
 
-<!-- Add new errors above this line, continuing from E-018. -->
+### E-018: A slow or stopped Postgres pushes a fallback search to ~12 s (breaks invariant 5)
+- **Date:** 2026-10-29 · **Task:** design-risk review (Kumar) · **Severity:** high · **Status:** fixed 2026-10-29
+- **Symptom:** Service hanging + Postgres stopped: `?refresh=true` searches took 11.8 s and 11.5 s (HTTP 200). With Postgres up, one fallback took 3.45 s, also over ~2.2 s.
+- **Root cause:** Only source calls have a budget (D-005). The stale fallback reads the snapshot *after* the source has used its 2 s, with `CancellationToken.None` (`AggregationService.cs:173`), and no database timeout is configured (Npgsql defaults: 15 s connect, 30 s command). Invariant 5's tests (`SourcePipelineTests.cs:80`, `:96`) cover the source pipeline only; the aggregation fakes answer instantly.
+- **Fix:** `LatencyBudgetOptions.SnapshotReadTimeoutMs` (300 ms, validated 10–2000). `AggregationService.WithFallbackAsync` stops waiting with `WaitAsync(budget, TimeProvider)` and keeps the original failure; logs `snapshot.read_timed_out`. Compose adds `Timeout=3;Command Timeout=5` to the Postgres connection string. Re-measured in Docker with Postgres stopped and Service hanging: 1.84 s (was 11.8 s); with Postgres up the stale fallback still works (1.6–1.9 s).
+- **Prevention:** `Search_SnapshotReadHangs_GivesUpAfterItsBudget_AndReportsTheSourceAsFailed` (invariant 5; red before the fix), options validation tests.
+
+### E-019: A stopped Redis makes every search take ~11–12 s
+- **Date:** 2026-10-29 · **Task:** design-risk review (Kumar) · **Severity:** high · **Status:** open, not fixed yet
+- **Symptom:** Redis stopped: 4 normal searches took 11.0–12.0 s each (HTTP 200, `X-Cache: MISS`); 8 `cache.failed` warnings. With Redis up: 0.09–0.23 s.
+- **Root cause:** The cache read (`AggregationService.cs:48`) and write (`:133`, awaited inside the fan-out) wait for StackExchange.Redis to give up (~5–6 s each; client defaults, nothing configured). `DistributedDocumentCache` turns the failure into a miss, so invariant 10 holds, but invariant 5 does not.
+- **Fix (proposed):** a short budget around cache get/set (e.g. 100–200 ms); write the cache in the background instead of inside the fan-out; set `connectTimeout`/`syncTimeout`/`abortConnect=false` for Redis. Test: a cache that never answers ⇒ search within budget.
+
+<!-- Add new errors above this line, continuing from E-020. -->
 
 ---
 
@@ -456,7 +469,14 @@ Evidence for the brief's "AI Engineering & Verification" criterion. Record **eve
 - **How it was caught:** Independent review of the diff since the first submission, then each finding checked against the code before acting; privacy checked on real container output.
 - **Correction:** All fixed with tests (331 total) except the healthcheck target, which is Kumar's decision (Q4). Lesson: green tests written by the same agent are not a review.
 
-<!-- Add new AI corrections above this line, continuing from AI-014. -->
+### AI-014: Agent stated guarantees that held only for the parts it had tested
+- **Date / phase:** 2026-10-29 · design review (prompted by Kumar's risk list)
+- **AI output:** (a) Invariant 5, "total request time is bounded by ~2.2 s regardless of source behaviour", marked as tested. (b) D-014: "with low traffic the min-throughput of 5 makes it behave almost the same" as "open after 5 consecutive failures".
+- **Problem:** (a) The bound held for the sources, not for the cache and snapshot calls on the same path: Redis or Postgres down made searches take ~12 s (E-018, E-019). (b) At under 5 calls per 10 s the breaker never opens: 8 timeouts in a row at ~3.6 s spacing left it `closed`, so every user paid ~1.5 s.
+- **How it was caught:** Kumar asked for each risk to be checked against the code; the agent then measured each one on the running stack instead of reasoning about it.
+- **Correction:** E-018, E-019, R4 recorded; fixes proposed, waiting for Kumar. Lesson: a latency guarantee must be tested end to end, with every dependency on the path made slow.
+
+<!-- Add new AI corrections above this line, continuing from AI-015. -->
 
 ---
 
@@ -470,7 +490,12 @@ Evidence for the brief's "AI Engineering & Verification" criterion. Record **eve
 | Q4 | The Docker healthcheck probes `/readyz`, which after D-024 answers 200 whenever the process is up, so it now detects nothing more than `/healthz` while opening a database connection every 10 s. Switch the probe to `/healthz`? (D5.6 review) | Kumar | Open |
 | R3 | Raw VINs are stored at rest in the Redis cache key (`docs:v1:{VIN}`) and `source_snapshot.vin`; both need the VIN for lookup. D-011 hashes only the audit table. | — | Accepted risk, recorded in D5.6 |
 | R1 | Per-process breaker state across replicas (D-007) | — | Accepted risk |
-| R2 | Duplicate heuristic false positives (D-009) | — | Accepted risk, tested |
+| R2 | Duplicate heuristic false positives (D-009) | — | Accepted risk, tested. 2026-10-29 review: the `(type, date)` fallback (`DocumentMerger.cs:63-64`) flags two **different** invoices or warranties from different sources issued the same day without a reference as `POSSIBLE_DUPLICATE` (flag only, nothing hidden). Matching by reference is exact after the `SV-{category}-` prefix is stripped (`ServiceAdapter.cs:112-117`), never a suffix match. |
+| R4 | The breaker needs ≥ 5 calls in 10 s (`ResilienceOptions.cs:33,36`), so at low traffic it never opens and each search to a dead source costs ~1.5 s (measured 2026-10-29: 8 timeouts, circuit stayed `closed`). Still within invariant 5. Changing it changes D-014 (ask Kumar). | Kumar | Open |
+| R5 | No rate limiting (0 references in `src/`) and no auth (A8): anyone who can reach the API can try VINs one after another and read every match. | Kumar | Open |
+| R6 | The audit salt is required (`PersistenceOptions.cs:18-20`) and no real value is committed, but compose falls back to the public `local-demo-salt-change-me` (`docker-compose.yml:27`) even with `ASPNETCORE_ENVIRONMENT=Production`, and nothing rejects it. A forgotten setting makes the audit hashes guessable for a known VIN range. | Kumar | Open |
+| R7 | `partial` is explained only in the operation description; the `partial` and `sources[].status` fields have no description in `docs/openapi.json`. | — | Open, low |
+| R8 | Single-flight is per process (D-020). With Redis down, 20 requests for one VIN at 4/s caused 3 fan-outs on one replica (1 with Redis up); that is low only because the slow cache write keeps the fan-out alive ~5.5 s. If Redis failed fast, nearly every request would fan out; with N replicas multiply by N. | — | Open, linked to E-019 |
 
 ---
 

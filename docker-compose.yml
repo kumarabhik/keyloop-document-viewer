@@ -21,7 +21,8 @@ services:
     ports: ["8080:8080"]
     environment:
       <<: *dotnet-env
-      ConnectionStrings__DocViewer: Host=postgres;Database=${POSTGRES_DB:-docviewer};Username=${POSTGRES_USER:-docviewer};Password=${POSTGRES_PASSWORD:-docviewer-local}
+      # Timeout/Command Timeout: Npgsql would otherwise wait 15 s / 30 s on a dead database (E-018).
+      ConnectionStrings__DocViewer: Host=postgres;Database=${POSTGRES_DB:-docviewer};Username=${POSTGRES_USER:-docviewer};Password=${POSTGRES_PASSWORD:-docviewer-local};Timeout=3;Command Timeout=5
       ConnectionStrings__Redis: redis:6379
       Persistence__Provider: Postgres
       Persistence__VinHashSalt: ${VIN_HASH_SALT:-local-demo-salt-change-me}

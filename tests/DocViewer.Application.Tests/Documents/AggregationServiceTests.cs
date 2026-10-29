@@ -44,6 +44,7 @@ public sealed class AggregationServiceTests : IDisposable
             _metrics.Metrics,
             new DealershipCalendar(_time, rules),
             rules,
+            MsOptions.Create(new LatencyBudgetOptions()),
             _time,
             NullLogger<AggregationService>.Instance);
     }
@@ -147,6 +148,28 @@ public sealed class AggregationServiceTests : IDisposable
         result.Documents.Sources.Single(s => s.Source == SourceSystem.Sales).Status.ShouldBe(SourceStatus.CircuitOpen);
         // Status is recomputed for today, not frozen at snapshot time.
         result.Documents.Documents.Single().Status.ShouldBe(DocumentStatus.Expired);
+    }
+
+    [Fact]
+    [Trait("Invariant", "5")]
+    public async Task Search_SnapshotReadHangs_GivesUpAfterItsBudget_AndReportsTheSourceAsFailed()
+    {
+        _snapshots.ReadsHang = true;
+        var service = CreateService(
+            FakeAdapter.Returning(SourceSystem.Sales, Doc("S-1", SourceSystem.Sales)),
+            FakeAdapter.Failing(SourceSystem.Service, SourceStatus.Timeout, "timeout"));
+
+        var search = service.SearchAsync(Request(refresh: true), CancellationToken.None);
+        _time.Advance(LatencyBudgetOptions.DefaultSnapshotReadTimeout - TimeSpan.FromMilliseconds(1));
+        search.IsCompleted.ShouldBeFalse(); // still allowed to wait for the database
+        _time.Advance(TimeSpan.FromMilliseconds(1));
+
+        search.IsCompleted.ShouldBeTrue(); // E-018: used to wait as long as the database did (~12 s measured)
+        var result = await search;
+        result.Outcome.ShouldBe(SearchOutcome.Partial);
+        var service2 = result.Documents.Sources.Single(s => s.Source == SourceSystem.Service);
+        service2.Status.ShouldBe(SourceStatus.Timeout); // no snapshot in time: the original failure stands
+        result.Documents.Documents.Select(d => d.SourceId).ShouldBe(["S-1"]);
     }
 
     [Fact]

@@ -71,8 +71,11 @@ internal sealed class FakeSnapshots : ISnapshotRepository
 
     public ConcurrentDictionary<(Vin, SourceSystem), SourceSnapshot> Stored { get; } = new();
 
+    /// <summary>Reads never answer and ignore cancellation, like a stopped Postgres container (E-018).</summary>
+    public bool ReadsHang { get; set; }
+
     public Task<SourceSnapshot?> GetAsync(Vin vin, SourceSystem source, CancellationToken cancellationToken) =>
-        Task.FromResult(Stored.GetValueOrDefault((vin, source)));
+        ReadsHang ? new TaskCompletionSource<SourceSnapshot?>().Task : Task.FromResult(Stored.GetValueOrDefault((vin, source)));
 
     public Task SaveAsync(Vin vin, SourceSystem source, IReadOnlyList<Document> documents, CancellationToken cancellationToken)
     {

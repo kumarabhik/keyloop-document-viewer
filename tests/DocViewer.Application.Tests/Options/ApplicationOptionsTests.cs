@@ -28,6 +28,7 @@ public class ApplicationOptionsTests
         rules.ExpiryWarningDays.ShouldBe(30);
         rules.TimeZone.ShouldBe("Asia/Kolkata");
         cache.Ttl.ShouldBe(TimeSpan.FromSeconds(60));
+        provider.GetRequiredService<IOptions<LatencyBudgetOptions>>().Value.SnapshotReadTimeout.ShouldBe(TimeSpan.FromMilliseconds(300));
     }
 
     [Fact]
@@ -47,6 +48,8 @@ public class ApplicationOptionsTests
     [InlineData("BusinessRules:ExpiryWarningDays", "-1")]
     [InlineData("BusinessRules:TimeZone", "Mars/Olympus_Mons")]
     [InlineData("Cache:TtlSeconds", "0")]
+    [InlineData("LatencyBudget:SnapshotReadTimeoutMs", "0")]
+    [InlineData("LatencyBudget:SnapshotReadTimeoutMs", "5000")] // longer than the whole 2.2 s promise
     public void InvalidValues_FailValidation(string key, string value)
     {
         using var provider = BuildProvider(new() { [key] = value });
@@ -55,6 +58,7 @@ public class ApplicationOptionsTests
         {
             _ = provider.GetRequiredService<IOptions<BusinessRulesOptions>>().Value;
             _ = provider.GetRequiredService<IOptions<CacheOptions>>().Value;
+            _ = provider.GetRequiredService<IOptions<LatencyBudgetOptions>>().Value;
         });
     }
 
