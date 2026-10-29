@@ -275,7 +275,7 @@ SERVICE stale      5 timeout 2026-10-27T20:31:29.929446+00:00
 
 In plain words: Sales answered normally. Service timed out, so the API served Service's last good copy from the database and labelled it `stale` with the time it was taken. The user still sees all nine documents, plus a warning. In step 2 the API returns **503** with `Retry-After: 5`, because neither system answered and there was no earlier copy of vehicle 10 to fall back on.
 
-After about five failures in ten seconds, a source's circuit breaker opens (`circuit_open`): the API stops calling it for 30 s and answers immediately instead of waiting 2 s each time (D-014).
+After three or more calls in ten seconds with at least half failing, a source's circuit breaker opens (`circuit_open`, D-027): the API stops calling it for 30 s and answers immediately instead of waiting 2 s each time (D-014).
 
 ## 7. Tests and quality gates
 

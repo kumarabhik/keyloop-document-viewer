@@ -35,7 +35,6 @@ public sealed class SourcePipelineTests : IDisposable
             ["Resilience:AttemptTimeoutSeconds"] = "1.0",
             ["Resilience:ConnectTimeoutSeconds"] = "0.2",
             ["Resilience:RetryBaseDelayMilliseconds"] = "10",
-            ["Resilience:BreakerMinimumThroughput"] = "5",
             ["Resilience:BreakerSamplingSeconds"] = "30",
             ["Resilience:BreakerBreakSeconds"] = "0.5",
         }).Build();
@@ -166,6 +165,23 @@ public sealed class SourcePipelineTests : IDisposable
         RequestCount.ShouldBe(requestsBefore);
         _provider.GetRequiredService<ISourceHealth>().GetHealth()
             .Single(h => h.Source == SourceSystem.Sales).Circuit.ShouldBe(CircuitState.Open);
+    }
+
+    [Fact]
+    public async Task ThreeFailures_OpenTheCircuit_AtTheDefaultMinimumThroughput()
+    {
+        // D-027: with the old minimum of 5, a source failing at low traffic never tripped the breaker (R4).
+        Respond(500);
+        for (var i = 0; i < 3; i++)
+        {
+            (await Adapter.GetDocumentsAsync(Vin, CancellationToken.None)).Status.ShouldBe(SourceStatus.Error);
+        }
+
+        var requestsBefore = RequestCount;
+        var result = await Adapter.GetDocumentsAsync(Vin, CancellationToken.None);
+
+        result.Status.ShouldBe(SourceStatus.CircuitOpen);
+        RequestCount.ShouldBe(requestsBefore); // no HTTP call while open
     }
 
     [Fact]

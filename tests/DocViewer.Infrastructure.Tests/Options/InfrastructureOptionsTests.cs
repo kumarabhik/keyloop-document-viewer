@@ -29,7 +29,7 @@ public class InfrastructureOptionsTests
         options.ConnectTimeout.ShouldBe(TimeSpan.FromSeconds(0.5));
         options.MaxRetryAttempts.ShouldBe(1);
         options.BreakerFailureRatio.ShouldBe(0.5);
-        options.BreakerMinimumThroughput.ShouldBe(5);
+        options.BreakerMinimumThroughput.ShouldBe(3); // D-027
         options.BreakerBreakDuration.ShouldBe(TimeSpan.FromSeconds(30));
         Validate(options).ShouldBeEmpty();
     }

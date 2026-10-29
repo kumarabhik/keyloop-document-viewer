@@ -483,7 +483,7 @@ Total timeout (2 s) → Retry (max 1) → Circuit breaker → Attempt timeout (1
 | **Total timeout** | 2.0 s per source, including any retry | Caps worst-case latency; user-facing budget (A5, D-005) |
 | **Attempt timeout** | 1.5 s per attempt; `SocketsHttpHandler.ConnectTimeout` 0.5 s | One slow attempt cannot use the whole budget |
 | **Retry** | Max 1; only on `HttpRequestException` (connect failure) or 502 / 503 / 504; **not** on attempt timeout or open circuit; 100 ms jittered backoff. If the total timeout fires during the retry, the result is a timeout. | Absorbs blips without breaking the deadline (D-005) |
-| **Circuit breaker** | Per source, per process. Opens when ≥ 50 % of calls fail within a 10 s window with at least 5 calls; stays open 30 s; half-open allows one probe | Stops hammering a dead system and saves 2 s for users while it is down (D-014) |
+| **Circuit breaker** | Per source, per process. Opens when ≥ 50 % of calls fail within a 10 s window with at least 3 calls (D-027; was 5); stays open 30 s; half-open allows one probe | Stops hammering a dead system and saves 2 s for users while it is down (D-014) |
 | **Stale fallback** | Snapshot ≤ 24 h from Postgres | Keeps the page useful during outages (D-003) |
 | **Bulkhead** | One named `HttpClient` per source with its own `SocketsHttpHandler`, `MaxConnectionsPerServer = 50` | A slow source cannot exhaust connections for the other |
 | **Graceful degradation of infra** | Redis down ⇒ skip cache. Postgres down ⇒ skip snapshot/audit. Both logged and counted. | Supporting infrastructure must never take search down |

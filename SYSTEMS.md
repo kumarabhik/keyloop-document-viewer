@@ -111,7 +111,7 @@ The project's memory. If it matters later, it goes here. Every agent and every h
 - **Consequences:** Python scaffold deleted; D1.1 and D1.2 restarted. All business rules, API contract and invariants are unchanged — only the implementation stack moved.
 
 ### D-014: Polly v8 via Microsoft.Extensions.Http.Resilience instead of a hand-written breaker
-- **Date:** 2026-10-27 · **Status:** Accepted · Supersedes D-007
+- **Date:** 2026-10-27 · **Status:** Accepted · Supersedes D-007 · Breaker minimum throughput superseded by D-027
 - **Context:** .NET has a standard, well-tested resilience library that plugs into `IHttpClientFactory` and emits telemetry.
 - **Decision:** One `AddResilienceHandler` per source client: total timeout 2 s → retry (max 1, connect errors and 502/503/504 only, not attempt timeouts) → circuit breaker (failure ratio 0.5, min throughput 5, sampling 10 s, break 30 s) → attempt timeout 1.5 s.
 - **Alternatives:** Hand-written breaker (more code to own); `AddStandardResilienceHandler` defaults (3 retries, 30 s total — breaks D-005).
@@ -194,7 +194,14 @@ The project's memory. If it matters later, it goes here. Every agent and every h
 - **Alternatives:** make the API strict (breaks D-021 leniency: lower case, spaces, comma lists, empty filter); encode the leniency as case-insensitive regexes (unreadable contract); fuzz without the negative-check exclusion (it flags only `?source=`, verified with a dedicated run).
 - **Consequences:** Clients see what to send; the API accepts a little more. Rejection of bad input stays covered by our own tests (invariant 6). Fuzzing is random: a CI failure prints a seed and a `curl` to reproduce.
 
-<!-- Add new decisions above this line, continuing from D-027. -->
+### D-027: Breaker minimum throughput 5 → 3
+- **Date:** 2026-10-30 · **Status:** Accepted (Kumar) · Supersedes the min-throughput part of D-014 · Resolves R4
+- **Context:** D-014 claimed the ratio breaker with min throughput 5 "behaves almost the same" as "5 consecutive failures" at low traffic. Measured 2026-10-29: 8 timeouts ~3.6 s apart left it `closed`; every user paid ~1.5 s (AI-014).
+- **Decision:** `Resilience:BreakerMinimumThroughput = 3`; ratio 0.5, sampling 10 s and break 30 s unchanged.
+- **Alternatives:** also lengthen sampling to 30 s (judges a recovered source on older history); switch to a consecutive-failures breaker (custom code, which D-014 avoided); leave it (R4 stays).
+- **Consequences:** Same experiment after the change: the breaker opened by the 3rd search; later searches answered in 0.01–0.04 s from the saved copy. Below 3 calls per 10 s it still never opens; each search then stays within invariant 5 anyway. Two failures out of three now trip it, so a brief blip can open it for 30 s; the half-open probe recovers it.
+
+<!-- Add new decisions above this line, continuing from D-028. -->
 
 ---
 
@@ -507,7 +514,7 @@ Evidence for the brief's "AI Engineering & Verification" criterion. Record **eve
 | R3 | Raw VINs are stored at rest in the Redis cache key (`docs:v1:{VIN}`) and `source_snapshot.vin`; both need the VIN for lookup. D-011 hashes only the audit table. | — | Accepted risk, recorded in D5.6 |
 | R1 | Per-process breaker state across replicas (D-007) | — | Accepted risk |
 | R2 | Duplicate heuristic false positives (D-009) | — | Accepted risk, tested. 2026-10-29 review: the `(type, date)` fallback (`DocumentMerger.cs:63-64`) flags two **different** invoices or warranties from different sources issued the same day without a reference as `POSSIBLE_DUPLICATE` (flag only, nothing hidden). Matching by reference is exact after the `SV-{category}-` prefix is stripped (`ServiceAdapter.cs:112-117`), never a suffix match. |
-| R4 | The breaker needs ≥ 5 calls in 10 s (`ResilienceOptions.cs:33,36`), so at low traffic it never opens and each search to a dead source costs ~1.5 s (measured 2026-10-29: 8 timeouts, circuit stayed `closed`). Still within invariant 5. Changing it changes D-014 (ask Kumar). | Kumar | Open |
+| R4 | The breaker needed ≥ 5 calls in 10 s, so at low traffic it never opened and each search to a dead source cost ~1.5 s (measured 2026-10-29: 8 timeouts, circuit stayed `closed`). | Kumar | Closed 2026-10-30 — min throughput 3 (D-027); opens by the 3rd search in the same experiment |
 | R5 | No rate limiting (0 references in `src/`) and no auth (A8): anyone who can reach the API can try VINs one after another and read every match. | Kumar | Open |
 | R6 | The audit salt is required (`PersistenceOptions.cs:18-20`) and no real value is committed, but compose falls back to the public `local-demo-salt-change-me` (`docker-compose.yml:27`) even with `ASPNETCORE_ENVIRONMENT=Production`, and nothing rejects it. A forgotten setting makes the audit hashes guessable for a known VIN range. | Kumar | Open |
 | R7 | `partial` is explained only in the operation description; the `partial` and `sources[].status` fields have no description in `docs/openapi.json`. | — | Open, low |

@@ -29,8 +29,12 @@ public sealed class ResilienceOptions : IValidatableObject
     [Range(0.01, 1.0)]
     public double BreakerFailureRatio { get; set; } = 0.5;
 
+    /// <summary>
+    /// Calls needed in the sampling window before the breaker may open. Was 5: at under 5 calls per 10 s a dead source
+    /// never tripped it and every search paid the timeout (R4, measured 2026-10-29). 3 per D-027 (Kumar).
+    /// </summary>
     [Range(2, 1000)]
-    public int BreakerMinimumThroughput { get; set; } = 5;
+    public int BreakerMinimumThroughput { get; set; } = 3;
 
     [Range(0.5, 600)]
     public double BreakerSamplingSeconds { get; set; } = 10;
