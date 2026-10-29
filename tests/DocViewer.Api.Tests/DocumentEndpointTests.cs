@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text.Json.Nodes;
 using DocViewer.Api.Http;
+using DocViewer.Application.Persistence;
+using DocViewer.Domain;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -177,17 +179,19 @@ public sealed class DocumentEndpointTests : IDisposable
     {
         BothSourcesHealthy();
         await GetAsync(DocumentsPath());
+
+        // Snapshots are written in the background after the response. Wait for it in the repository, not by searching
+        // again: every failing search feeds the breaker, and four of them opened it before a slow SQLite commit landed.
+        var snapshots = _factory.Services.GetRequiredService<ISnapshotRepository>();
+        for (var i = 0; i < 100 && await snapshots.GetAsync(Vin.Parse(Payloads.Vin), SourceSystem.Service, CancellationToken.None) is null; i++)
+        {
+            await Task.Delay(50);
+        }
+
         _factory.Service.Reset();
         _factory.ServiceReturns(Payloads.Vin, 500, "{}");
-
-        // Snapshots are written in the background after the first response; allow it a moment.
-        JsonNode? service = null;
-        for (var attempt = 0; attempt < 50 && service?["status"]?.GetValue<string>() != "stale"; attempt++)
-        {
-            await Task.Delay(100);
-            var (_, body) = await GetAsync(DocumentsPath(query: "?refresh=true"));
-            service = body["sources"]!.AsArray().Single(s => s!["name"]!.GetValue<string>() == "SERVICE");
-        }
+        var (_, body) = await GetAsync(DocumentsPath(query: "?refresh=true"));
+        var service = body["sources"]!.AsArray().Single(s => s!["name"]!.GetValue<string>() == "SERVICE");
 
         service!["status"]!.GetValue<string>().ShouldBe("stale");
         service["error"]!.GetValue<string>().ShouldBe("http_500");

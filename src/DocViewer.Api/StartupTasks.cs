@@ -1,3 +1,5 @@
+using DocViewer.Application.Persistence;
+using DocViewer.Domain;
 using DocViewer.Infrastructure;
 
 namespace DocViewer.Api;
@@ -39,7 +41,32 @@ internal static partial class StartupTasks
         {
             LogDatabaseInitFailed(app.Logger, ex);
         }
+
+        await WarmUpSnapshotReadAsync(app);
     }
+
+    /// <summary>
+    /// One throwaway snapshot lookup, so the first real fallback does not pay for EF query compilation and a cold
+    /// connection: that cold read took over the 300 ms snapshot budget (E-018) in 2 of 10 test runs. Best effort:
+    /// the repository turns failures into "no snapshot", and a dead database cannot hold start-up for more than 5 s.
+    /// </summary>
+    private static async Task WarmUpSnapshotReadAsync(WebApplication app)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(app.Lifetime.ApplicationStopping);
+        timeout.CancelAfter(TimeSpan.FromSeconds(5));
+        var snapshots = app.Services.GetRequiredService<ISnapshotRepository>();
+        try
+        {
+            await snapshots.GetAsync(WarmUpVin, SourceSystem.Sales, timeout.Token).WaitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException) when (!app.Lifetime.ApplicationStopping.IsCancellationRequested)
+        {
+            // The database is slow or down; searches handle that themselves (invariant 10).
+        }
+    }
+
+    /// <summary>A well-formed VIN no dealer system will hold (all zeros).</summary>
+    private static readonly Vin WarmUpVin = Vin.Parse("00000000000000000");
 
     [LoggerMessage(EventId = 900, Level = LogLevel.Error, Message = "startup.database_init_failed; continuing without persistence")]
     private static partial void LogDatabaseInitFailed(ILogger logger, Exception exception);

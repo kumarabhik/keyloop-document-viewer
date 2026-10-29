@@ -51,6 +51,35 @@ public sealed class AggregationServiceTests : IDisposable
 
     private static SearchRequest Request(bool refresh = false) => new(TestVin, refresh, "trace-1");
 
+    private static readonly TimeSpan Step = TimeSpan.FromMilliseconds(5);
+
+    /// <summary>
+    /// The loop may notice completion a few steps late (continuations hop threads). The fakes never answer, so finishing
+    /// at all on fake time proves the budget; the lower bound proves it did not give up early.
+    /// </summary>
+    private static readonly TimeSpan Slack = TimeSpan.FromMilliseconds(100);
+
+    /// <summary>
+    /// Moves the fake clock forward in small steps until <paramref name="task"/> finishes and returns how much fake time
+    /// that took. Budgeted calls start on the thread pool, so a single big jump could land before a timer exists;
+    /// stepping makes the result independent of scheduling. The real-time guard only stops a broken test from hanging.
+    /// </summary>
+    private async Task<TimeSpan> AdvanceUntilDoneAsync(Task task)
+    {
+        var waited = TimeSpan.Zero;
+        var guard = System.Diagnostics.Stopwatch.StartNew();
+        while (!task.IsCompleted && guard.Elapsed < TimeSpan.FromSeconds(10))
+        {
+            _time.Advance(Step);
+            waited += Step;
+            await Task.Yield();
+            SpinWait.SpinUntil(() => task.IsCompleted, 1); // let thread-pool continuations register their timers
+        }
+
+        task.IsCompleted.ShouldBeTrue("the search never finished: a call is not under any budget");
+        return waited;
+    }
+
     [Fact]
     public async Task Search_BothSourcesOk_ReturnsMergedCompleteResult()
     {
@@ -160,16 +189,37 @@ public sealed class AggregationServiceTests : IDisposable
             FakeAdapter.Failing(SourceSystem.Service, SourceStatus.Timeout, "timeout"));
 
         var search = service.SearchAsync(Request(refresh: true), CancellationToken.None);
-        _time.Advance(LatencyBudgetOptions.DefaultSnapshotReadTimeout - TimeSpan.FromMilliseconds(1));
-        search.IsCompleted.ShouldBeFalse(); // still allowed to wait for the database
-        _time.Advance(TimeSpan.FromMilliseconds(1));
+        var waited = await AdvanceUntilDoneAsync(search);
 
-        search.IsCompleted.ShouldBeTrue(); // E-018: used to wait as long as the database did (~12 s measured)
+        // E-018: used to wait as long as the database did (~12 s measured).
+        waited.ShouldBeInRange(LatencyBudgetOptions.DefaultSnapshotReadTimeout, LatencyBudgetOptions.DefaultSnapshotReadTimeout + Slack);
         var result = await search;
         result.Outcome.ShouldBe(SearchOutcome.Partial);
         var service2 = result.Documents.Sources.Single(s => s.Source == SourceSystem.Service);
         service2.Status.ShouldBe(SourceStatus.Timeout); // no snapshot in time: the original failure stands
         result.Documents.Documents.Select(d => d.SourceId).ShouldBe(["S-1"]);
+    }
+
+    [Fact]
+    [Trait("Invariant", "5")]
+    [Trait("Invariant", "10")]
+    public async Task Search_CacheHangs_ReadAndWriteEachGiveUpAfterTheirBudget()
+    {
+        _cache.Hangs = true;
+        var service = CreateService(
+            FakeAdapter.Returning(SourceSystem.Sales, Doc("S-1", SourceSystem.Sales)),
+            FakeAdapter.Returning(SourceSystem.Service, Doc("V-1", SourceSystem.Service)));
+
+        var search = service.SearchAsync(Request(), CancellationToken.None);
+        var waited = await AdvanceUntilDoneAsync(search);
+
+        // E-019: used to wait ~5-6 s on each call to a stopped Redis. Read and write each get one budget.
+        var both = LatencyBudgetOptions.DefaultCacheTimeout * 2;
+        waited.ShouldBeInRange(both, both + Slack);
+        var result = await search;
+        result.Outcome.ShouldBe(SearchOutcome.Complete);
+        result.Cache.ShouldBe(CacheStatus.Miss);
+        result.Documents.Documents.Count.ShouldBe(2);
     }
 
     [Fact]
@@ -292,8 +342,13 @@ public sealed class AggregationServiceTests : IDisposable
             return SourceResult.Ok(SourceSystem.Sales, [], TimeSpan.Zero);
         });
         var service = CreateService(sales, FakeAdapter.Returning(SourceSystem.Service));
+        using var cacheLookups = _metrics.Collect<long>("docviewer.cache.requests");
 
         var searches = Enumerable.Range(0, 5).Select(_ => service.SearchAsync(Request(), CancellationToken.None)).ToList();
+        // Cache calls run on the thread pool (E-019), so wait until all five have missed the cache: the miss is recorded
+        // right before joining the fan-out, with no await between. Only then are they truly concurrent with it.
+        SpinWait.SpinUntil(() => cacheLookups.GetMeasurementSnapshot().Count(m => Equals(m.Tags["result"], "miss")) == 5, TimeSpan.FromSeconds(5))
+            .ShouldBeTrue();
         gate.SetResult();
         var results = await Task.WhenAll(searches).WaitAsync(TimeSpan.FromSeconds(5));
 

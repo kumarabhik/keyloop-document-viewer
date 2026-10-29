@@ -46,7 +46,7 @@ public sealed partial class AggregationService(
             AggregatedDocuments? cached;
             using (DocViewerTracing.Source.StartActivity("cache.get"))
             {
-                cached = await cache.GetAsync(request.Vin, cancellationToken);
+                cached = await WithinBudgetAsync(() => cache.GetAsync(request.Vin, cancellationToken), "cache.get", request.Vin);
             }
 
             metrics.CacheLookup(cached is null ? "miss" : "hit");
@@ -131,7 +131,8 @@ public sealed partial class AggregationService(
 
         if (!aggregated.Partial)
         {
-            await cache.SetAsync(aggregated, CancellationToken.None); // D-006
+            // D-006. Budgeted (E-019): a stuck write would otherwise hold this shared fan-out and every waiting caller.
+            await WithinBudgetAsync(() => SetCacheAsync(aggregated), "cache.set", vin);
         }
 
         foreach (var ok in live.Where(r => r.IsOk))
@@ -140,6 +141,37 @@ public sealed partial class AggregationService(
         }
 
         return aggregated;
+    }
+
+    /// <summary>
+    /// Starts <paramref name="call"/> on the thread pool, so work it does synchronously before returning its task
+    /// counts against the budget too: the first Redis call connected synchronously for ~1.5 s, unseen by
+    /// <c>WaitAsync</c> (E-019).
+    /// </summary>
+    private static Task<T> OffThread<T>(Func<Task<T>> call) => Task.Run(call);
+
+    private async Task<bool> SetCacheAsync(AggregatedDocuments aggregated)
+    {
+        await cache.SetAsync(aggregated, CancellationToken.None);
+        return true;
+    }
+
+    /// <summary>
+    /// Waits for a cache call at most <see cref="LatencyBudgetOptions.CacheTimeout"/>, then carries on as a miss.
+    /// <c>IDocumentCache</c> already turns errors into misses; this covers a cache that hangs (E-019, invariant 5).
+    /// </summary>
+    private async Task<T?> WithinBudgetAsync<T>(Func<Task<T?>> call, string operation, Vin vin)
+    {
+        try
+        {
+            return await OffThread(call).WaitAsync(budget.Value.CacheTimeout, timeProvider);
+        }
+        catch (TimeoutException)
+        {
+            metrics.CacheLookup("timeout");
+            LogCacheTimedOut(logger, operation, vin.Masked, budget.Value.CacheTimeoutMs);
+            return default;
+        }
     }
 
     /// <summary>Adapters must not throw (AGENTS.md §4.3); this guard keeps invariant 1 even if one has a bug.</summary>
@@ -178,7 +210,7 @@ public sealed partial class AggregationService(
         SourceSnapshot? snapshot;
         try
         {
-            snapshot = await snapshots.GetAsync(vin, failed.Source, CancellationToken.None)
+            snapshot = await OffThread(() => snapshots.GetAsync(vin, failed.Source, CancellationToken.None))
                 .WaitAsync(budget.Value.SnapshotReadTimeout, timeProvider);
         }
         catch (TimeoutException)
@@ -241,6 +273,9 @@ public sealed partial class AggregationService(
     [LoggerMessage(EventId = 1003, Level = LogLevel.Warning,
         Message = "snapshot.read_timed_out {Source} vin={VinMasked} budgetMs={BudgetMs}")]
     private static partial void LogSnapshotReadTimedOut(ILogger logger, SourceSystem source, string vinMasked, int budgetMs);
+
+    [LoggerMessage(EventId = 1004, Level = LogLevel.Warning, Message = "cache.timed_out operation={Operation} vin={VinMasked} budgetMs={BudgetMs}")]
+    private static partial void LogCacheTimedOut(ILogger logger, string operation, string vinMasked, int budgetMs);
 
     [LoggerMessage(EventId = 1002, Level = LogLevel.Warning, Message = "persistence.background_failed operation={Operation}")]
     private static partial void LogBackgroundWriteFailed(ILogger logger, string operation, Exception exception);

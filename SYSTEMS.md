@@ -335,12 +335,20 @@ Record anything that cost more than ~15 minutes, would bite someone again, or ch
 - **Prevention:** `Search_SnapshotReadHangs_GivesUpAfterItsBudget_AndReportsTheSourceAsFailed` (invariant 5; red before the fix), options validation tests.
 
 ### E-019: A stopped Redis makes every search take ~11–12 s
-- **Date:** 2026-10-29 · **Task:** design-risk review (Kumar) · **Severity:** high · **Status:** open, not fixed yet
+- **Date:** 2026-10-29 · **Task:** design-risk review (Kumar) · **Severity:** high · **Status:** fixed 2026-10-30
 - **Symptom:** Redis stopped: 4 normal searches took 11.0–12.0 s each (HTTP 200, `X-Cache: MISS`); 8 `cache.failed` warnings. With Redis up: 0.09–0.23 s.
 - **Root cause:** The cache read (`AggregationService.cs:48`) and write (`:133`, awaited inside the fan-out) wait for StackExchange.Redis to give up (~5–6 s each; client defaults, nothing configured). `DistributedDocumentCache` turns the failure into a miss, so invariant 10 holds, but invariant 5 does not.
-- **Fix (proposed):** a short budget around cache get/set (e.g. 100–200 ms); write the cache in the background instead of inside the fan-out; set `connectTimeout`/`syncTimeout`/`abortConnect=false` for Redis. Test: a cache that never answers ⇒ search within budget.
+- **Fix:** `LatencyBudgetOptions.CacheTimeoutMs` (150 ms) on each cache read and write in `AggregationService`; a write that runs out of time finishes on its own. The write stayed inline (not moved to the background as first proposed), so a repeat search right after a complete one is still a `HIT`. Budgeted calls start on the thread pool (`OffThread`): the first Redis call connected *synchronously* for ~1.5 s before returning its task, which `WaitAsync` alone never saw. Compose: Redis `connectTimeout=2000,syncTimeout=1000,asyncTimeout=1000,abortConnect=false`. Re-measured in Docker: Redis stopped 0.32–0.63 s (was 11–12 s); first search on a fresh container 1.81 s (was 3.39 s).
+- **Prevention:** `Search_CacheHangs_ReadAndWriteEachGiveUpAfterTheirBudget` (red before the fix; fails again with the budget removed). See E-020 for two tests that had to change.
 
-<!-- Add new errors above this line, continuing from E-020. -->
+### E-020: The budget fixes exposed two timing-dependent tests
+- **Date:** 2026-10-30 · **Task:** E-018/E-019 fixes · **Severity:** medium (tests)
+- **Symptom:** (1) `Search_ConcurrentMissesForOneVin_ShareOneFanOut` saw 2 fan-outs instead of 1. (2) `SourceFailsAfterEarlierSuccess_ServesLabelledStaleSnapshot` failed in ~25 % of runs with `circuit_open` instead of `http_500`. On the commit before the fixes (`c654c72`, separate worktree): 0 of 10 failed.
+- **Root cause:** (1) The fake cache used to answer synchronously, so all five searches reached the shared fan-out before the test opened the gate; cache calls now hop to the thread pool (as real Redis calls always did). Single-flight (D-020) is unchanged. (2) The test waited for the background snapshot save by *searching*; each failing search feeds the breaker. A diagnostic run showed the Service snapshot committed ~0.7 s late behind other SQLite writes (one hit the documented insert race), so four failed polls opened the breaker first. Separately, the first snapshot read after start-up exceeded the new 300 ms budget in 2 of 10 runs (cold EF query + connection): a real side effect, not only a test problem.
+- **Fix:** (1) The test opens the gate only after all five searches have recorded their cache miss (recorded immediately before joining the fan-out). (2) The test waits on `ISnapshotRepository` directly, then makes one failing search. Product: `StartupTasks.WarmUpSnapshotReadAsync` runs one lookup at start-up (best effort, 5 s cap); timeouts in the isolated runs went from 2 to 0. Both tests still fail when the behaviour they guard is removed (checked by mutation). Full suite 336/336 twice; the two tests 0/40 and 0/20.
+- **Prevention:** A test must not wait for background work by repeating the request it is testing when that request has side effects (breaker, cache).
+
+<!-- Add new errors above this line, continuing from E-021. -->
 
 ---
 
@@ -476,7 +484,14 @@ Evidence for the brief's "AI Engineering & Verification" criterion. Record **eve
 - **How it was caught:** Kumar asked for each risk to be checked against the code; the agent then measured each one on the running stack instead of reasoning about it.
 - **Correction:** E-018, E-019, R4 recorded; fixes proposed, waiting for Kumar. Lesson: a latency guarantee must be tested end to end, with every dependency on the path made slow.
 
-<!-- Add new AI corrections above this line, continuing from AI-015. -->
+### AI-015: Agent reported a test as passing with a check that could not see failures
+- **Date / phase:** 2026-10-30 · testing (E-019)
+- **AI output:** "failed: 0 / 10" for `SourceFailsAfterEarlierSuccess…`, run with `--logger "console;verbosity=normal"` and a grep for `Failed!`.
+- **Problem:** That logger setting prints "Test Run Failed." instead of `Failed!`, so the check reported 0 whatever happened. The real rate was ~25 %. The agent's first fix (budget with `WaitAsync` only) also missed work the Redis client does synchronously before returning a task.
+- **How it was caught:** A second check printed the actual per-run result lines; the cold-start request was read from the API's own log, not inferred.
+- **Correction:** E-019 and E-020. Lesson: before trusting "0 failures", make the check fail once on purpose; the mutation runs in this fix do exactly that.
+
+<!-- Add new AI corrections above this line, continuing from AI-016. -->
 
 ---
 
@@ -495,7 +510,7 @@ Evidence for the brief's "AI Engineering & Verification" criterion. Record **eve
 | R5 | No rate limiting (0 references in `src/`) and no auth (A8): anyone who can reach the API can try VINs one after another and read every match. | Kumar | Open |
 | R6 | The audit salt is required (`PersistenceOptions.cs:18-20`) and no real value is committed, but compose falls back to the public `local-demo-salt-change-me` (`docker-compose.yml:27`) even with `ASPNETCORE_ENVIRONMENT=Production`, and nothing rejects it. A forgotten setting makes the audit hashes guessable for a known VIN range. | Kumar | Open |
 | R7 | `partial` is explained only in the operation description; the `partial` and `sources[].status` fields have no description in `docs/openapi.json`. | — | Open, low |
-| R8 | Single-flight is per process (D-020). With Redis down, 20 requests for one VIN at 4/s caused 3 fan-outs on one replica (1 with Redis up); that is low only because the slow cache write keeps the fan-out alive ~5.5 s. If Redis failed fast, nearly every request would fan out; with N replicas multiply by N. | — | Open, linked to E-019 |
+| R8 | Single-flight is per process (D-020). With Redis down, 20 requests for one VIN at 4/s caused 3 fan-outs on one replica (1 with Redis up); that was low only because the slow cache write kept the fan-out alive ~5.5 s. Since E-019 the write gives up after 150 ms, so with Redis down a popular VIN now fans out about once per non-overlapping request per replica (N replicas ⇒ N×). Each fan-out is bounded by the breaker and D-005. A local in-memory fallback cache would cap it; not built. | — | Accepted risk, updated 2026-10-30 |
 
 ---
 

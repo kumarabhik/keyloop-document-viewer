@@ -29,6 +29,7 @@ public class ApplicationOptionsTests
         rules.TimeZone.ShouldBe("Asia/Kolkata");
         cache.Ttl.ShouldBe(TimeSpan.FromSeconds(60));
         provider.GetRequiredService<IOptions<LatencyBudgetOptions>>().Value.SnapshotReadTimeout.ShouldBe(TimeSpan.FromMilliseconds(300));
+        provider.GetRequiredService<IOptions<LatencyBudgetOptions>>().Value.CacheTimeout.ShouldBe(TimeSpan.FromMilliseconds(150));
     }
 
     [Fact]
@@ -50,6 +51,7 @@ public class ApplicationOptionsTests
     [InlineData("Cache:TtlSeconds", "0")]
     [InlineData("LatencyBudget:SnapshotReadTimeoutMs", "0")]
     [InlineData("LatencyBudget:SnapshotReadTimeoutMs", "5000")] // longer than the whole 2.2 s promise
+    [InlineData("LatencyBudget:CacheTimeoutMs", "5000")]
     public void InvalidValues_FailValidation(string key, string value)
     {
         using var provider = BuildProvider(new() { [key] = value });

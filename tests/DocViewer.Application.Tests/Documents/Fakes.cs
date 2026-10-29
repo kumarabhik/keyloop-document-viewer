@@ -54,11 +54,19 @@ internal sealed class FakeCache : IDocumentCache
 
     public int Sets => Volatile.Read(ref _sets);
 
+    /// <summary>Calls never answer and ignore cancellation, like a stopped Redis (E-019).</summary>
+    public bool Hangs { get; set; }
+
     public Task<AggregatedDocuments?> GetAsync(Vin vin, CancellationToken cancellationToken) =>
-        Task.FromResult(Entries.GetValueOrDefault(vin));
+        Hangs ? new TaskCompletionSource<AggregatedDocuments?>().Task : Task.FromResult(Entries.GetValueOrDefault(vin));
 
     public Task SetAsync(AggregatedDocuments documents, CancellationToken cancellationToken)
     {
+        if (Hangs)
+        {
+            return new TaskCompletionSource().Task;
+        }
+
         Interlocked.Increment(ref _sets);
         Entries[documents.Vin] = documents;
         return Task.CompletedTask;

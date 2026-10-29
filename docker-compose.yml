@@ -23,7 +23,8 @@ services:
       <<: *dotnet-env
       # Timeout/Command Timeout: Npgsql would otherwise wait 15 s / 30 s on a dead database (E-018).
       ConnectionStrings__DocViewer: Host=postgres;Database=${POSTGRES_DB:-docviewer};Username=${POSTGRES_USER:-docviewer};Password=${POSTGRES_PASSWORD:-docviewer-local};Timeout=3;Command Timeout=5
-      ConnectionStrings__Redis: redis:6379
+      # Client defaults wait ~5 s per call on a dead Redis; the search itself gives up after 150 ms (E-019).
+      ConnectionStrings__Redis: redis:6379,connectTimeout=2000,syncTimeout=1000,asyncTimeout=1000,abortConnect=false
       Persistence__Provider: Postgres
       Persistence__VinHashSalt: ${VIN_HASH_SALT:-local-demo-salt-change-me}
       Sources__Sales__BaseUrl: http://sales-mock:8080
