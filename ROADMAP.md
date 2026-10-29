@@ -15,9 +15,9 @@
 | Field | Value |
 |---|---|
 | Active day | Day 3 |
-| Next task | **Kumar:** (1) decide Q4 (healthcheck on `/healthz`?), (2) OK to tag `v1.1` (closes D5.6), (3) re-run k6 with minikube stopped (E-014, D5.4), (4) browser pass at :5173 (D4.6), (5) Jaeger screenshot (D3.3), (6) record the video from `docs/video-script.md` (D5.7). Agent work on the roadmap is otherwise done; backlog items remain optional |
+| Next task | **Kumar:** (1) decide Q4 (healthcheck on `/healthz`?), (2) OK to tag `v1.1` (closes D5.6), (3) browser pass at :5173 (D4.6), (4) record the video from `docs/video-script.md` (D5.7). Agent work on the roadmap is otherwise done; backlog items remain optional |
 | Blockers | None |
-| Last updated | 2026-10-30 (pagination D-031; 365 tests green) |
+| Last updated | 2026-10-30 (D3.3 and D5.4 closed by Kumar's checks) |
 
 ## Progress Summary
 
@@ -26,9 +26,9 @@
 | Day 0 — Planning | 6 | 6 | `[x]` |
 | Day 1 — Foundations: solution, domain, mocks, adapters | 7 | 7 | `[x]` |
 | Day 2 — Aggregation, resilience, cache, persistence, API | 7 | 7 | `[x]` |
-| Day 3 — Observability, packaging, docs (**submission-ready**) | 7 | 6 (+D3.3 partial) | `[~]` |
+| Day 3 — Observability, packaging, docs (**submission-ready**) | 7 | 7 | `[x]` |
 | Day 4 — Frontend demo client (Blazor, D-025) | 6 | 5 (+D4.6 partial) | `[~]` |
-| Day 5 — Smart features, hardening, video | 7 | 4 (+D5.4, D5.6, D5.7 partial) | `[~]` |
+| Day 5 — Smart features, hardening, video | 7 | 5 (+D5.6, D5.7 partial) | `[~]` |
 
 **Plan shape:** Days 1–3 build the complete, gradable submission (core backend, tests, docs, Docker). Days 4–5 are extra development that make it stand out. If time runs short, the submission at the end of Day 3 must already be complete.
 
@@ -126,7 +126,7 @@ Goal: the endpoint works end to end with resilience, cache and persistence.
 
 ---
 
-## Day 3 — Observability, packaging, documentation `[~]`
+## Day 3 — Observability, packaging, documentation `[x]`
 
 Goal: **submission-ready.** Everything the brief requires exists and runs from a clean clone.
 
@@ -136,7 +136,7 @@ Goal: **submission-ready.** Everything the brief requires exists and runs from a
 - [x] **D3.2 Metrics** — `DocViewerMetrics` (Meter "DocViewer") with all custom instruments in DESIGN §12.2; OpenTelemetry metrics incl. ASP.NET Core, HttpClient, runtime, Polly; Prometheus `/metrics`.
   - ✅ Test with `MetricCollector<T>`: hit/miss/partial/stale counters increment; no VIN tags.
 
-- [~] **D3.3 Tracing** — OpenTelemetry tracing (ASP.NET Core, HttpClient, EF Core) + `ActivitySource("DocViewer")` spans; OTLP exporter; `traceId` in body and `X-Trace-Id`. — _verified via Jaeger API (span tree in docs/diagrams/trace-example.md); UI screenshot still to take_
+- [x] **D3.3 Tracing** — OpenTelemetry tracing (ASP.NET Core, HttpClient, EF Core) + `ActivitySource("DocViewer")` spans; OTLP exporter; `traceId` in body and `X-Trace-Id`. — _verified via Jaeger API (docs/diagrams/trace-example.md) and in the Jaeger UI by Kumar on 2026-10-30: `docs/diagrams/jaeger-trace.png` shows `source.sales` and `source.service` overlapping in one trace (also saved: Grafana and UI screenshots)_
   - ✅ Manual check in Jaeger / Aspire dashboard: one trace shows two parallel source spans (screenshot in `docs/diagrams/`).
 
 - [x] **D3.4 Docker Compose** — multi-stage Dockerfiles (SDK build → chiselled ASP.NET runtime) for API and mocks; `docker-compose.yml` with api, sales-mock, service-mock, postgres, redis, healthchecks; `obs` profile with Prometheus, Grafana (provisioned dashboard), Jaeger.
@@ -181,7 +181,7 @@ Goal: a polished UI that shows the full user experience against the real API (or
 - [x] **D5.1 Expiry alerts** — summary banner "1 expired, 1 expiring in 10 days"; filter by status (server-side filters already exist).
 - [x] **D5.2 Source health panel** — UI panel from `/api/v1/sources/health` showing circuit state and latency; failure demo toggles that call the mocks' `/__admin/fault` (mocks allow the UI origin on `/__admin` only).
 - [x] **D5.3 Filters** — by source and type in the UI, synced to URL query.
-- [~] **D5.4 Load test** — k6 script (`infra/k6/search.js`), results table in README; verify p95 targets and breaker behaviour under induced failure. — _script, `load` compose profile and README table done; breaker behaviour verified (5 slow, then 20 at 4–11 ms, all 200). Cache-hit p95 is 133 ms at 50 users vs 20 ms target (E-014, likely CPU contention from an unrelated minikube). Next: Kumar re-runs with minikube stopped._
+- [x] **D5.4 Load test** — k6 script (`infra/k6/search.js`), results table in README; verify p95 targets and breaker behaviour under induced failure. — _All targets met on 2026-10-30 (Kumar, machine otherwise idle): hit p95 5.5 ms, miss p95 8.2 ms, 0/11 970 failed, breaker-open p95 6.9 ms. The earlier miss was CPU contention from minikube (E-014, resolved)._
 - [x] **D5.5 Real-Postgres tests** — Testcontainers PostgreSQL job for the repository and migrations (catches SQLite/Postgres differences); log any differences found. — _6 tests on `postgres:16-alpine` via Testcontainers 4.16.0, in the normal test run (CI included); skipped with a reason without Docker. One difference found and logged: `jsonb` re-formats stored JSON (E-015)._
 - [~] **D5.6 Final review** — `/code-review` pass on the whole repo, security review (no VIN in logs, no secrets), update docs, re-tag `v1.1`. — _Code review of everything since the first submission: 10 findings, 9 fixed with tests (AI-013), 1 is Kumar's decision (Q4). Security: raw VIN found in nginx logs and fixed (E-017); 0 raw VINs in all container logs and metrics afterwards; no secrets committed; VINs at rest recorded as R3. 331 tests, coverage gate passes. Remaining: tag `v1.1` (needs Kumar's OK)._
 - [~] **D5.7 Video (5–10 min)** — script in `docs/video-script.md`: intro & scenario (0:30) → design walkthrough (2:00) → implementation highlights (1:30) → AI collaboration story (1:30) → live demo incl. failure toggle (2:30) → learnings & challenges (1:00). Record and upload. — _Script written (`docs/video-script.md`, 9:00 with prep checklist and paste-ready PowerShell). Recording and upload: Kumar._

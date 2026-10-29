@@ -331,24 +331,24 @@ CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs build, format, te
 
 ```powershell
 $env:RATE_LIMIT_PER_MINUTE = 1000000              # k6 sends ~80 searches/s from one address; lift the 60/min limit (R5)
-docker compose up --build -d                      # the stack must be running
+docker compose up --build -d --wait               # --wait: returns only when the API is healthy
 docker compose --profile load run --rm k6         # 2 min at 50 users, then the breaker phase (~3 min)
 docker compose --profile load run --rm -e VUS=1 -e DURATION=30s k6   # quick single-user run
-Remove-Item Env:RATE_LIMIT_PER_MINUTE; docker compose up -d api   # back to the normal limit
+Remove-Item Env:RATE_LIMIT_PER_MINUTE; docker compose up -d --wait api   # back to the normal limit
 ```
 
-The script is [infra/k6/search.js](infra/k6/search.js); k6 runs in its own container, nothing to install. Results from 2026-10-28 on the author's laptop (Docker Desktop with 6 CPUs, shared with an unrelated minikube cluster using ~2 of them):
+The script is [infra/k6/search.js](infra/k6/search.js); k6 runs in its own container, nothing to install, and waits up to 60 s for the API before it starts. Results on the author's laptop (Docker Desktop, 6 CPUs), 50 users for 2 minutes:
 
-| Measure | Target (DESIGN §2.2) | 1 user | 50 users | Verdict |
+| Measure | Target (DESIGN §2.2) | 2026-10-30, machine otherwise idle | 2026-10-28, minikube using ~2 of the 6 CPUs | Verdict |
 |---|---|---|---|---|
-| Cache hit, p95 | < 20 ms | **7.8 ms** | **133 ms** (median 5.5 ms) | ✗ at 50 users on this machine |
-| Cache miss, p95 | < 300 ms | 44 ms | 251 ms | ✓ |
-| Errors | < 1 % | 0 % | 0 % of 11 129 requests | ✓ |
-| Throughput | — | 2 req/s | 82 req/s | — |
+| Cache hit, p95 | < 20 ms | **5.5 ms** (median 1.9 ms) | 133 ms | ✓ |
+| Cache miss, p95 | < 300 ms | **8.2 ms** | 251 ms | ✓ |
+| Errors | < 1 % | **0 of 11 970** requests | 0 of 11 129 | ✓ |
+| After the breaker opened, p95 | < 100 ms | **6.9 ms** | 10 ms | ✓ |
 
 **Breaker phase** (Service hangs, one user searches 25 times): searches 1–5 took ~1.5 s each (one attempt timeout, no retry, D-005), then the breaker opened and searches 6–25 answered in **4–11 ms** with Service's saved copy (`stale`, reason `circuit_open`). All 25 were HTTP 200 within the 2.2 s budget.
 
-In plain words: one user gets cache hits in a few milliseconds. With 50 users on this laptop most hits are still fast (median 5.5 ms), but the slowest 5 % take up to ~130 ms. The API's thread pool never queued work and GC pauses were small, so the likely cause is CPU contention inside Docker rather than the code. That is a likely explanation, not a proven one; see E-014.
+In plain words: with 50 users, 95 % of cache hits answer within 5.5 ms and 95 % of misses within 8.2 ms. The first run missed the hit target (133 ms) because another workload was using a third of Docker's CPUs; with it stopped, the same test passes with a wide margin (E-014).
 
 ## 8. Observability
 

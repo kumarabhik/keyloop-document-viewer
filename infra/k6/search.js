@@ -40,6 +40,16 @@ export const options = {
 };
 
 export function setup() {
+  // Wait for the API: started right after `docker compose up -d api`, the first run measured only
+  // "connection refused" (2026-10-30). Give up loudly rather than report numbers for a dead API.
+  let ready = false;
+  for (let i = 0; i < 60 && !ready; i++) {
+    const res = http.get(`${API}/readyz`, { tags: { name: 'readyz' } });
+    ready = res.status === 200;
+    if (!ready) sleep(1);
+  }
+  if (!ready) throw new Error(`API at ${API} did not become ready within 60 s`);
+
   setFault(SALES, 'none');
   setFault(SERVICE, 'none');
   for (const vin of VINS) http.get(`${API}/api/v1/vehicles/${vin}/documents`); // warm connections and cache

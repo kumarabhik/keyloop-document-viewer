@@ -335,11 +335,12 @@ Record anything that cost more than ~15 minutes, would bite someone again, or ch
 - **Prevention:** Same rule as E-001/E-005, now applied to the healthcheck tests: only timing tests run on timing budgets.
 
 ### E-014: Load test misses the cache-hit p95 target at 50 users (133 ms vs 20 ms)
-- **Date:** 2026-10-28 · **Task:** D5.4 · **Severity:** medium (open)
+- **Date:** 2026-10-28 · **Task:** D5.4 · **Severity:** medium · **Status:** resolved 2026-10-30 (machine contention)
 - **Symptom:** `search_hit_ms p(95)=132.51ms` (threshold 20 ms) over 2 min at 50 VUs; median 5.5 ms, max 1.8 s. Single user: p95 7.8 ms. Miss p95 251 ms (target 300 ms) and 0 % errors passed.
 - **Root cause:** Not proven. Evidence against the API code: thread-pool queue length 0 throughout, GC pauses ~8 ms per second. Evidence for the machine: Docker's 6-CPU VM was shared by an unrelated `minikube` container at ~200 % CPU, k6 itself (17 %), the API (60 %) and Postgres (20 %, one audit row per search, cache hits included). Thread count ramped 5 → 19 at the start, which may explain early outliers.
 - **Fix:** None. The threshold was **not** relaxed (AGENTS.md §6).
 - **Next:** Re-run with minikube stopped. If p95 is still > 20 ms, profile the hit path (audit write, JSON serialisation, logging) and consider `ThreadPool.SetMinThreads` only with measurements.
+- **Resolution (2026-10-30):** Kumar re-ran it with minikube stopped: hit p95 **5.52 ms**, miss p95 8.21 ms, 0 of 11 970 requests failed, breaker-open p95 6.85 ms. The hypothesis held: the code was not the cause. A first re-run attempt was spoiled because the agent's instructions started k6 while the API was still restarting ("connection refused"); the script now waits for `/readyz` and the README uses `--wait`. The threshold was never relaxed.
 
 ### E-015: SQLite and PostgreSQL store the audit JSON differently (found by D5.5)
 - **Date:** 2026-10-28 · **Task:** D5.5 · **Severity:** low (test-only)
