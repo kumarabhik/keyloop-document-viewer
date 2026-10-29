@@ -288,6 +288,28 @@ public sealed class DocumentEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task TooManySearchesFromOneClient_Get429ProblemWithRetryAfter_AndCallNoSource()
+    {
+        BothSourcesHealthy();
+        using var factory = _factory.WithWebHostBuilder(b => b.UseSetting("RateLimit:PermitsPerMinute", "2"));
+        using var client = factory.CreateClient();
+
+        (await client.GetAsync(new Uri(DocumentsPath(), UriKind.Relative))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await client.GetAsync(new Uri(DocumentsPath("BADVIN"), UriKind.Relative))).StatusCode.ShouldBe(HttpStatusCode.BadRequest); // counts too
+        var salesCallsBefore = _factory.Sales.LogEntries.Count;
+        var rejected = await client.GetAsync(new Uri(DocumentsPath(query: "?refresh=true"), UriKind.Relative));
+
+        rejected.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests); // R5
+        rejected.Headers.RetryAfter!.Delta!.Value.ShouldBeGreaterThan(TimeSpan.Zero);
+        rejected.Content.Headers.ContentType!.MediaType.ShouldBe("application/problem+json");
+        var problem = JsonNode.Parse(await rejected.Content.ReadAsStringAsync())!;
+        problem["type"]!.GetValue<string>().ShouldEndWith("/too-many-requests");
+        problem["traceId"].ShouldNotBeNull();
+        _factory.Sales.LogEntries.Count.ShouldBe(salesCallsBefore); // rejected before any source is called
+        (await client.GetAsync(new Uri("/api/v1/sources/health", UriKind.Relative))).StatusCode.ShouldBe(HttpStatusCode.OK); // not limited
+    }
+
+    [Fact]
     public void DatabaseCheck_TimesOutFastAsDegraded_SoTheContainerProbeNeverWaitsOnTheDatabase()
     {
         var registration = _factory.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations

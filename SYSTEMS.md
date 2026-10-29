@@ -201,7 +201,14 @@ The project's memory. If it matters later, it goes here. Every agent and every h
 - **Alternatives:** also lengthen sampling to 30 s (judges a recovered source on older history); switch to a consecutive-failures breaker (custom code, which D-014 avoided); leave it (R4 stays).
 - **Consequences:** Same experiment after the change: the breaker opened by the 3rd search; later searches answered in 0.01–0.04 s from the saved copy. Below 3 calls per 10 s it still never opens; each search then stays within invariant 5 anyway. Two failures out of three now trip it, so a brief blip can open it for 30 s; the half-open probe recovers it.
 
-<!-- Add new decisions above this line, continuing from D-028. -->
+### D-028: Per-IP rate limit on searches, 429 with Retry-After
+- **Date:** 2026-10-30 · **Status:** Accepted (Kumar) · Resolves R5 · Adds a status code to the contract
+- **Context:** No rate limit and no auth (A8): anyone could try VIN after VIN and read every match.
+- **Decision:** ASP.NET Core's built-in limiter (no new package), fixed 1-minute window per client IP, `RateLimit:PermitsPerMinute` = 60 (validated), no queue (a queued search would break invariant 5). Documents endpoint only; health, metrics and OpenAPI are not limited. Over the limit ⇒ 429 problem (`…/too-many-requests`) with `Retry-After` and `traceId`; no source is called. Invalid-VIN requests count too. The UI shows "Too many searches… try again in N seconds". The CI fuzz job and the k6 load test raise the limit explicitly (`RATE_LIMIT_PER_MINUTE`).
+- **Alternatives:** sliding window or token bucket (smoother, harder to explain in a demo); per-API-key limits (needs auth, out of scope A8).
+- **Consequences:** Behind a reverse proxy every client shares the proxy's address until forwarded headers are configured (documented in `SearchRateLimiting`). With N replicas the limit is per replica. Verified in Docker: 65 searches ⇒ 60 × 200, 5 × 429, `Retry-After: 60`.
+
+<!-- Add new decisions above this line, continuing from D-029. -->
 
 ---
 
@@ -515,7 +522,7 @@ Evidence for the brief's "AI Engineering & Verification" criterion. Record **eve
 | R1 | Per-process breaker state across replicas (D-007) | — | Accepted risk |
 | R2 | Duplicate heuristic false positives (D-009) | — | Accepted risk, tested. 2026-10-29 review: the `(type, date)` fallback (`DocumentMerger.cs:63-64`) flags two **different** invoices or warranties from different sources issued the same day without a reference as `POSSIBLE_DUPLICATE` (flag only, nothing hidden). Matching by reference is exact after the `SV-{category}-` prefix is stripped (`ServiceAdapter.cs:112-117`), never a suffix match. |
 | R4 | The breaker needed ≥ 5 calls in 10 s, so at low traffic it never opened and each search to a dead source cost ~1.5 s (measured 2026-10-29: 8 timeouts, circuit stayed `closed`). | Kumar | Closed 2026-10-30 — min throughput 3 (D-027); opens by the 3rd search in the same experiment |
-| R5 | No rate limiting (0 references in `src/`) and no auth (A8): anyone who can reach the API can try VINs one after another and read every match. | Kumar | Open |
+| R5 | No rate limiting and no auth (A8): anyone who can reach the API could try VINs one after another and read every match. | Kumar | Closed 2026-10-30 — 60 searches/min per IP, 429 (D-028). Auth is still out of scope (A8), so a slow enumerator is only slowed, not stopped. |
 | R6 | The audit salt is required (`PersistenceOptions.cs:18-20`) and no real value is committed, but compose falls back to the public `local-demo-salt-change-me` (`docker-compose.yml:27`) even with `ASPNETCORE_ENVIRONMENT=Production`, and nothing rejects it. A forgotten setting makes the audit hashes guessable for a known VIN range. | Kumar | Open |
 | R7 | `partial` is explained only in the operation description; the `partial` and `sources[].status` fields have no description in `docs/openapi.json`. | — | Open, low |
 | R8 | Single-flight is per process (D-020). With Redis down, 20 requests for one VIN at 4/s caused 3 fan-outs on one replica (1 with Redis up); that was low only because the slow cache write kept the fan-out alive ~5.5 s. Since E-019 the write gives up after 150 ms, so with Redis down a popular VIN now fans out about once per non-overlapping request per replica (N replicas ⇒ N×). Each fan-out is bounded by the breaker and D-005. A local in-memory fallback cache would cap it; not built. | — | Accepted risk, updated 2026-10-30 |

@@ -30,6 +30,8 @@ services:
       Sources__Sales__BaseUrl: http://sales-mock:8080
       Sources__Service__BaseUrl: http://service-mock:8080
       Cors__AllowedOrigins__0: http://localhost:5173
+      # Searches per client IP per minute (R5). Raise it for load tests: README §7.1.
+      RateLimit__PermitsPerMinute: ${RATE_LIMIT_PER_MINUTE:-60}
       # Traces go to Jaeger when the obs profile runs; without it the exporter fails silently.
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4317}
       OTEL_SERVICE_NAME: docviewer-api

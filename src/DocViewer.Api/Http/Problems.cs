@@ -18,6 +18,14 @@ internal static class Problems
     public static ProblemHttpResult InvalidFilter(string detail, HttpContext context) =>
         TypedResults.Problem(detail, context.Request.Path, StatusCodes.Status400BadRequest, "Invalid filter", TypeBase + "invalid-filter");
 
+    public static ProblemHttpResult TooManyRequests(HttpContext context) =>
+        TypedResults.Problem(
+            "Too many searches from this client. Wait for the time in Retry-After, then try again.",
+            context.Request.Path,
+            StatusCodes.Status429TooManyRequests,
+            "Too many requests",
+            TypeBase + "too-many-requests");
+
     public static ProblemHttpResult SourcesUnavailable(SearchResult result, HttpContext context)
     {
         context.Response.Headers.RetryAfter = RetryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);

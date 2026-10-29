@@ -32,6 +32,8 @@ internal sealed class DocumentsApiClient(HttpClient http, IOptions<ApiOptions> o
                 HttpStatusCode.ServiceUnavailable => new SearchOutcome.Unavailable(
                     await ReadProblemAsync(response, traceId, cancellationToken),
                     response.Headers.RetryAfter?.Delta ?? DefaultRetryAfter),
+                HttpStatusCode.TooManyRequests => new SearchOutcome.Failed(
+                    $"Too many searches in a short time. Try again in {Seconds(response.Headers.RetryAfter?.Delta ?? DefaultRetryAfter)}.", traceId),
                 _ => new SearchOutcome.Failed($"The API answered HTTP {(int)response.StatusCode}.", traceId),
             };
         }
@@ -96,6 +98,9 @@ internal sealed class DocumentsApiClient(HttpClient http, IOptions<ApiOptions> o
     }
 
     private Uri MockUrl(string source) => source == WireValues.Sales ? options.Value.SalesMockUrl : options.Value.ServiceMockUrl;
+
+    private static string Seconds(TimeSpan delay) =>
+        Components.Format.Plural((int)Math.Ceiling(delay.TotalSeconds), "second");
 
     private static async Task<ProblemResponse> ReadProblemAsync(HttpResponseMessage response, string? traceId, CancellationToken cancellationToken) =>
         await ReadAsync(response, WebJsonContext.Default.ProblemResponse, cancellationToken)

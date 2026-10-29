@@ -27,7 +27,9 @@ internal static class DocumentEndpoints
                 "Calls the Sales and Service systems in parallel and returns one merged list. Each document names its source. " +
                 "If a source fails, the response is still 200 with partial=true; 503 only when no source answered and no snapshot exists.")
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
+            .RequireRateLimiting(SearchRateLimiting.PolicyName);
 
         api.MapGet("/sources/health", GetSourceHealth)
             .WithName("GetSourceHealth")

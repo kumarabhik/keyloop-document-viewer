@@ -51,6 +51,18 @@ public sealed class DocumentsApiClientTests
     }
 
     [Fact]
+    public async Task Search_429_SaysWhenToTryAgain()
+    {
+        var outcome = await ClientFor(new StubHandler(HttpStatusCode.TooManyRequests,
+                """{"title":"Too many requests","status":429}""", "application/problem+json", retryAfterSeconds: 42, traceId: "t-9"))
+            .SearchAsync(Vin, refresh: false, CancellationToken.None);
+
+        var failed = outcome.ShouldBeOfType<SearchOutcome.Failed>();
+        failed.Message.ShouldBe("Too many searches in a short time. Try again in 42 seconds.");
+        failed.TraceId.ShouldBe("t-9");
+    }
+
+    [Fact]
     public async Task Search_UnexpectedStatus_ReturnsFailedWithTheTraceId()
     {
         var outcome = await ClientFor(new StubHandler(HttpStatusCode.InternalServerError, "", "text/plain", traceId: "t-1"))

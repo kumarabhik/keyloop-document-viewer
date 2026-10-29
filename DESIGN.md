@@ -340,6 +340,7 @@ Details settled during implementation (D-021):
 |---|---|
 | 400 | Invalid VIN format or invalid filter value |
 | 200 | Success — complete, partial, stale, or empty |
+| 429 | More than `RateLimit:PermitsPerMinute` searches (default 60) from one client IP in a minute; `Retry-After` set; no source is called (R5) |
 | 503 | Both sources failed and no snapshot exists (`Retry-After` set) |
 | 500 | Unexpected bug (generic message; details only in logs) |
 

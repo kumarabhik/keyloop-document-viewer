@@ -314,9 +314,11 @@ CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs build, format, te
 ### 7.1 Load test (k6)
 
 ```powershell
+$env:RATE_LIMIT_PER_MINUTE = 1000000              # k6 sends ~80 searches/s from one address; lift the 60/min limit (R5)
 docker compose up --build -d                      # the stack must be running
 docker compose --profile load run --rm k6         # 2 min at 50 users, then the breaker phase (~3 min)
 docker compose --profile load run --rm -e VUS=1 -e DURATION=30s k6   # quick single-user run
+Remove-Item Env:RATE_LIMIT_PER_MINUTE; docker compose up -d api   # back to the normal limit
 ```
 
 The script is [infra/k6/search.js](infra/k6/search.js); k6 runs in its own container, nothing to install. Results from 2026-10-28 on the author's laptop (Docker Desktop with 6 CPUs, shared with an unrelated minikube cluster using ~2 of them):

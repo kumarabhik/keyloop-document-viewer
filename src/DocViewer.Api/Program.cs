@@ -36,6 +36,8 @@ builder.Services.AddOpenApi(o => o.AddDocumentTransformer((document, _, _) =>
     return Task.CompletedTask;
 }).AddOperationTransformer<DocumentParametersTransformer>().AddSchemaTransformer<OptionalWhenNullSchemaTransformer>());
 
+builder.Services.AddSearchRateLimiting();
+
 builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>(
     DatabaseHealthCheck.Name, failureStatus: HealthStatus.Degraded, tags: ["ready"], timeout: DatabaseHealthCheck.Timeout);
 
@@ -53,6 +55,7 @@ app.UseStatusCodePages();
 app.UseTraceIdHeader();
 app.UseAccessLog();
 app.UseCors();
+app.UseRateLimiter(); // after the trace id, so a 429 problem carries one too
 
 app.MapDocumentEndpoints();
 app.MapOpenApi(); // GET /openapi/v1.json
