@@ -38,6 +38,19 @@ public sealed class OpenApiContractTests : IDisposable
         required.ShouldContain("status");
     }
 
+    [Theory]
+    [InlineData("DocumentsResponse", "partial", "sources")]
+    [InlineData("SourceStatusResponse", "status", "stale")]
+    [InlineData("SourceStatusResponse", "asOf", "stale")]
+    public async Task ResponseFields_TellClientsHowToReadAPartialAnswer(string schema, string property, string mustMention)
+    {
+        // R7: a client generated from the spec must learn to check `partial` and each source's status.
+        var description = (await DocumentAsync())["components"]!["schemas"]![schema]!["properties"]![property]!["description"]?.GetValue<string>();
+
+        description.ShouldNotBeNullOrWhiteSpace();
+        description.ShouldContain(mustMention, Case.Insensitive);
+    }
+
     [Fact]
     public async Task VinParameter_DocumentsTheCanonicalPattern()
     {

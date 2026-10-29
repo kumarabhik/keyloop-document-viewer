@@ -281,7 +281,7 @@ After three or more calls in ten seconds with at least half failing, a source's 
 
 ```bash
 dotnet build                          # warnings are errors; also regenerates docs/openapi.json
-dotnet test                           # all test projects (331 tests, ~1–2 min; needs Docker for 6 of them)
+dotnet test                           # all test projects (349 tests, ~1–2 min; needs Docker for 6 of them)
 dotnet format --verify-no-changes     # style check
 ```
 
@@ -403,12 +403,14 @@ The whole project was built with AI assistance: a chat assistant for the first-p
 | AI-011 | A launch profile to switch the Blazor environment | Has no effect in .NET 10 (build-time property) | Response headers, then the SDK's own targets file |
 | AI-012 | Generated OpenAPI spec trusted because it cannot drift | It required a field healthy responses omit (E-016) | Contract fuzzing |
 | AI-013 | The agent's own Day 4–5 code, all tests green | 9 real bugs (time zone, race, timeout, mock gaps) and a raw VIN in nginx logs (E-017) | Independent code review + checking real container logs |
+| AI-014 | "Bounded at ~2.2 s" claimed, tested only for the sources | A stopped Redis or Postgres made searches take ~12 s (E-018, E-019) | Kumar's risk review, measured on the running stack |
+| AI-015 | "0 / 10 failures" from a check that could not see failures | The real rate was ~25 % | Printing the actual per-run results |
 
 ### 10.4 Quality: what the process produced
 
-- 331 automated tests plus contract fuzzing in CI; coverage Domain 99 %, Application 98 %, Infrastructure 94 %, Api 95 %, Web 91 % (gate: 85 % on Domain + Application).
+- 349 automated tests plus contract fuzzing in CI; coverage Domain 99 %, Application 98 %, Infrastructure 94 %, Api 95 %, Web 91 % (gate: 85 % on Domain + Application).
 - Every invariant in SYSTEMS.md §6 is guarded by a tagged test; every row of the failure matrix (DESIGN §6.3) is automated.
-- 26 recorded decisions, 17 recorded errors and 13 AI corrections, each dated and linked to code and tests.
+- 29 recorded decisions, 20 recorded errors and 15 AI corrections, each dated and linked to code and tests.
 - The submission runs from a clean clone with one command and no secrets.
 
 **What I learned about working with an agent:** it is fast and thorough when the target is written down and checkable, and it is most dangerous when it is confident about something nobody checked — a library default, a log format, a stack choice. The process above exists to turn those cases into failing tests or explicit questions as early as possible.

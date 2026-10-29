@@ -259,7 +259,8 @@
             "type": "string"
           },
           "partial": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "True when at least one source is not `ok`. The documents are then incomplete or partly stale: check `sources[].status` and show the user which system is missing or out of date. Still HTTP 200."
           },
           "generatedAt": {
             "type": "string",
@@ -465,6 +466,7 @@
             "$ref": "#/components/schemas/SourceSystem"
           },
           "status": {
+            "description": "`ok`: this source answered. `stale`: it failed, and its documents come from the last saved copy (see `asOf`). `timeout`, `error`, `circuit_open`: it failed and none of its documents are in this response.",
             "$ref": "#/components/schemas/SourceStatus"
           },
           "latencyMs": {
@@ -488,6 +490,7 @@
               "null",
               "string"
             ],
+            "description": "When the saved copy was taken; set only when `status` is `stale`. Copies older than 24 h (default) are never served.",
             "format": "date-time"
           },
           "error": {
