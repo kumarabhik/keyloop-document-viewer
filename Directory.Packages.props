@@ -37,7 +37,15 @@
     <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.14" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.14" />
   </ItemGroup>
+  <ItemGroup Label="Aspire AppHost (local orchestration, backlog)">
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.6.1" />
+    <PackageVersion Include="Aspire.Hosting.Redis" Version="13.6.1" />
+    <!-- Aspire.Hosting 13.6.1 pulls MessagePack 2.5.302, which has GHSA-qhrr-8q5h-9q3h (fixed in 2.5.303). NuGet audit
+         rejects it (warnings are errors); 2.5.307 is what newer Aspire releases ship. Drop this once Aspire is upgraded. -->
+    <PackageVersion Include="MessagePack" Version="2.5.307" />
+  </ItemGroup>
   <ItemGroup Label="Testing">
+    <PackageVersion Include="Aspire.Hosting.Testing" Version="13.6.1" />
     <PackageVersion Include="bunit" Version="2.13.3" />
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.14" />

@@ -109,6 +109,15 @@ dotnet run --project src/DocViewer.Api           # :8080 (Development: Scalar UI
 
 In Development the API creates a SQLite database file and uses an in-memory cache. Interactive API docs: <http://localhost:8080/scalar>.
 
+### 4.1 One command with .NET Aspire (optional)
+
+```powershell
+docker compose down                                # same ports (8080–8082, 5173), so stop the compose stack first
+dotnet run --project aspire/DocViewer.AppHost      # Docker must be running: Postgres and Redis run as containers
+```
+
+The console prints a dashboard link (`http://localhost:15201/login?t=…`). The dashboard lists every resource (Postgres, Redis, both mocks, the API, the UI) with its state and console logs; the API also sends its traces and metrics there. Everything else (URLs, demo VINs, fault switches) works as with Docker Compose. Notes: the first start pulls `postgres:16-alpine` and `redis:7-alpine`; Aspire's tooling may ask to trust the .NET HTTPS development certificate; structured logs stay in the console view because the API logs through Serilog to stdout. `tests/DocViewer.AppHost.Tests` starts the whole system this way and makes a real search (needs Docker).
+
 ## 5. Try the API
 
 ### 5.1 Seed vehicles
@@ -281,7 +290,7 @@ After three or more calls in ten seconds with at least half failing, a source's 
 
 ```bash
 dotnet build                          # warnings are errors; also regenerates docs/openapi.json
-dotnet test                           # all test projects (349 tests, ~1–2 min; needs Docker for 6 of them)
+dotnet test                           # all test projects (350 tests, ~1–2 min; needs Docker for 6 of them)
 dotnet format --verify-no-changes     # style check
 ```
 
@@ -301,6 +310,7 @@ The HTML report lands in `TestResults/coverage/report/index.html`.
 | `DocViewer.Infrastructure.Tests` | Adapters against WireMock (mapping, `dd/MM/yyyy`, malformed records), Polly timing (timeout ⇒ no retry; 503 ⇒ one retry; breaker opens), cache, EF Core on SQLite **and on a real PostgreSQL container** (migrations, `jsonb`, upserts; skipped without Docker or with `DOCVIEWER_SKIP_POSTGRES_TESTS=1`) |
 | `DocViewer.Api.Tests` | HTTP contract end to end, ProblemDetails, filters, headers, **no raw VIN in logs/spans/metrics**, readiness when the DB is down |
 | `Mocks.Tests` | Seed scenarios and every fault mode |
+| `DocViewer.AppHost.Tests` | The whole system started through the Aspire AppHost answers a real search from both sources and reports `Healthy` (needs Docker) |
 | `DocViewer.Web.Tests` | Demo UI with bUnit: source badges, partial/stale banners, every page state, URL filters, contract drift vs `openapi.json` |
 
 Each invariant in [SYSTEMS.md §6](SYSTEMS.md#6-invariants) has a test tagged `[Trait("Invariant", "N")]`:
@@ -408,9 +418,9 @@ The whole project was built with AI assistance: a chat assistant for the first-p
 
 ### 10.4 Quality: what the process produced
 
-- 349 automated tests plus contract fuzzing in CI; coverage Domain 99 %, Application 98 %, Infrastructure 94 %, Api 95 %, Web 91 % (gate: 85 % on Domain + Application).
+- 350 automated tests plus contract fuzzing in CI; coverage Domain 99 %, Application 98 %, Infrastructure 94 %, Api 95 %, Web 91 % (gate: 85 % on Domain + Application).
 - Every invariant in SYSTEMS.md §6 is guarded by a tagged test; every row of the failure matrix (DESIGN §6.3) is automated.
-- 29 recorded decisions, 20 recorded errors and 15 AI corrections, each dated and linked to code and tests.
+- 30 recorded decisions, 21 recorded errors and 15 AI corrections, each dated and linked to code and tests.
 - The submission runs from a clean clone with one command and no secrets.
 
 **What I learned about working with an agent:** it is fast and thorough when the target is written down and checkable, and it is most dangerous when it is confident about something nobody checked — a library default, a log format, a stack choice. The process above exists to turn those cases into failing tests or explicit questions as early as possible.

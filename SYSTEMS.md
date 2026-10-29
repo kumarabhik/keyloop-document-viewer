@@ -215,7 +215,14 @@ The project's memory. If it matters later, it goes here. Every agent and every h
 - **Alternatives:** warn only (a forgotten setting still ships); default compose to Development (exception page, see above); generate a random salt per start (audit hashes would no longer match across restarts).
 - **Consequences:** `docker compose up` works with no `.env` as before; `.env.example` copied unchanged with `Production` fails fast with a message naming `VIN_HASH_SALT`. Verified in Docker both ways. Schema set-up and the snapshot warm-up run before options validation, so a refused start logs one extra warning first.
 
-<!-- Add new decisions above this line, continuing from D-030. -->
+### D-030: Optional .NET Aspire AppHost for local runs
+- **Date:** 2026-10-30 · **Status:** Accepted (Kumar: "the strongest backlog item")
+- **Context:** Running the full stack meant Docker Compose plus three browser tabs for logs, traces and metrics.
+- **Decision:** `aspire/DocViewer.AppHost` (Aspire 13.6.1: `Aspire.AppHost.Sdk`, `Aspire.Hosting.PostgreSQL`, `Aspire.Hosting.Redis`; newer 13.6.x were under two weeks old). Same ports as compose via the projects' launch profiles; Postgres `16-alpine` and Redis `7-alpine` pinned to match compose and Testcontainers (Aspire's defaults were 18.3 and 8.6); the E-018/E-019 client timeouts appended to Aspire's connection strings; API waits for both containers and both mocks; `/readyz` is its health check. The API pushes metrics over OTLP only when `OTEL_METRICS_EXPORTER=otlp` (the AppHost sets it; compose's Jaeger takes traces only). The `http` launch profile is first and sets `ASPIRE_ALLOW_UNSECURED_TRANSPORT`, so no dev certificate is needed.
+- **Alternatives:** make Aspire the only way to run (reviewers without Docker or the Aspire tooling would lose the simple path); `AddServiceDefaults` project (would duplicate our telemetry setup); Serilog OTLP sink for structured logs in the dashboard (one more package; console logs already show there).
+- **Consequences:** Docker Compose stays the documented primary path and the image build is unchanged. Compose and the AppHost cannot run at the same time (same ports). `DocViewer.AppHost.Tests` starts everything (~30 s) and fails if wiring breaks (checked by removing the Postgres connection string ⇒ `Degraded`).
+
+<!-- Add new decisions above this line, continuing from D-031. -->
 
 ---
 
@@ -370,7 +377,14 @@ Record anything that cost more than ~15 minutes, would bite someone again, or ch
 - **Prevention:** A test must not wait for background work by repeating the request it is testing when that request has side effects (breaker, cache).
 - **Update 2026-10-30:** CI failed on `f496b6e`: a third test with the same assumption, `Search_CallerCancels_StopsWaitingWithoutCancellingSharedFanOut` (2 fan-outs instead of 1), passed every local run but not on the faster CI runner. The agent had repeated only the tests it had changed, not their siblings using the same gate pattern. Same fix (wait for both cache misses before cancelling); Application suite 0/60 locally; still fails with single-flight removed. Rule: after a timing change, re-run *every* test that uses the pattern, and let CI have the last word.
 
-<!-- Add new errors above this line, continuing from E-021. -->
+### E-021: Aspire 13.6.1 pulled a MessagePack version with a known vulnerability
+- **Date:** 2026-10-30 · **Task:** Aspire AppHost (D-030) · **Severity:** medium (supply chain)
+- **Symptom:** `dotnet restore` failed: `NU1902: Package 'MessagePack' 2.5.302 has a known moderate severity vulnerability, GHSA-qhrr-8q5h-9q3h` (warnings are errors, D-017).
+- **Root cause:** Aspire.Hosting 13.6.1 depends on MessagePack 2.5.302; the advisory (nested arrays can exceed buffer limits, published 2026-10-15) is fixed in 2.5.303. Aspire 13.6.4 depends on 2.5.307 but was only 6 days old.
+- **Fix:** Pinned `MessagePack` 2.5.307 (released 2026-10-03, the version newer Aspire ships) as a direct dependency of the AppHost, with a comment to drop it when Aspire is upgraded. Not suppressed.
+- **Prevention:** NuGet audit as an error did its job. Rule: never suppress NU190x; pin the patched transitive version instead.
+
+<!-- Add new errors above this line, continuing from E-022. -->
 
 ---
 

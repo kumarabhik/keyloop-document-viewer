@@ -658,6 +658,7 @@ keyloop/
 │   ├── Mocks.Tests/
 │   └── DocViewer.Web.Tests/        # bUnit tests for the demo client
 ├── frontend/DocViewer.Web/         # Blazor WebAssembly demo client (D-025)
+├── aspire/DocViewer.AppHost/       # optional one-command local run with the Aspire dashboard (D-030)
 ├── http/docviewer.http             # runnable request examples
 ├── docker/Dockerfile               # one multi-stage Dockerfile for the API and both mocks
 ├── scripts/coverage.ps1            # tests + coverage report + 85 % gate
@@ -671,6 +672,7 @@ keyloop/
 |---|---|
 | `docker compose up --build` | API :8080, Sales mock :8081, Service mock :8082, Postgres :5432, Redis :6379, UI :5173 (nginx) |
 | `docker compose --profile obs up` | + Prometheus :9090, Grafana :3000, Jaeger :16686 |
+| `dotnet run --project aspire/DocViewer.AppHost` | The same services through .NET Aspire, plus its dashboard (D-030) |
 | `dotnet build` | Builds everything (warnings are errors) and regenerates `docs/openapi.json` |
 | `dotnet test` | All test projects |
 | `dotnet format --verify-no-changes` | Style check (CI) |

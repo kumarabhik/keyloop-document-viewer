@@ -17,13 +17,23 @@ internal static class TelemetrySetup
 
         builder.Services.AddOpenTelemetry()
             .ConfigureResource(r => r.AddService(ServiceName))
-            .WithMetrics(metrics => metrics
-                .AddMeter(DocViewerMetrics.MeterName)
-                .AddMeter("Polly") // resilience_polly_strategy_events_total: retries, timeouts, breaker transitions
-                .AddAspNetCoreInstrumentation()
-                .AddHttpClientInstrumentation()
-                .AddRuntimeInstrumentation()
-                .AddPrometheusExporter())
+            .WithMetrics(metrics =>
+            {
+                metrics
+                    .AddMeter(DocViewerMetrics.MeterName)
+                    .AddMeter("Polly") // resilience_polly_strategy_events_total: retries, timeouts, breaker transitions
+                    .AddAspNetCoreInstrumentation()
+                    .AddHttpClientInstrumentation()
+                    .AddRuntimeInstrumentation()
+                    .AddPrometheusExporter();
+
+                // Opt-in push for collectors that take OTLP metrics, e.g. the Aspire dashboard. Not on by default:
+                // compose's Jaeger accepts traces only. No metric carries a VIN (invariant 7); the tags are the same.
+                if (!string.IsNullOrWhiteSpace(otlpEndpoint) && builder.Configuration["OTEL_METRICS_EXPORTER"] == "otlp")
+                {
+                    metrics.AddOtlpExporter();
+                }
+            })
             .WithTracing(tracing =>
             {
                 tracing

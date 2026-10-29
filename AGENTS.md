@@ -159,6 +159,7 @@ Run from the repository root. Identical on Windows, macOS and Linux.
 | Add EF migration (PostgreSQL, D-019) | `dotnet ef migrations add <Name> --project src/DocViewer.Infrastructure --output-dir Persistence/Migrations` |
 | Run the demo UI (:5173) / in mock mode (no backend) | `dotnet run --project frontend/DocViewer.Web` / add `-p:WasmApplicationEnvironmentName=Mock` |
 | Full stack (API :8080, mocks :8081/:8082, UI :5173, Postgres, Redis) | `docker compose up --build` |
+| Same stack with the Aspire dashboard (stop compose first; needs Docker) | `dotnet run --project aspire/DocViewer.AppHost` |
 | Full stack + Prometheus :9090, Grafana :3000, Jaeger :16686 | `docker compose --profile obs up --build` |
 | Stop the stack | `docker compose --profile obs down` (add `-v` to drop the Postgres volume) |
 | Runnable request examples | [http/docviewer.http](http/docviewer.http) |

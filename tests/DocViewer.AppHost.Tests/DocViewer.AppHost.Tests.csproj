@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\..\aspire\DocViewer.AppHost\DocViewer.AppHost.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.Testing" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Same "needs Docker, else skip with a reason" rule as the real-PostgreSQL tests (D5.5). -->
+    <Compile Include="..\DocViewer.Infrastructure.Tests\Persistence\Postgres\PostgresFactAttribute.cs" Link="PostgresFactAttribute.cs" />
+  </ItemGroup>
+</Project>

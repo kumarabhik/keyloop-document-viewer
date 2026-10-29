@@ -1,0 +1,20 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.6.1">
+  <!-- Local orchestration with the Aspire dashboard (backlog). Not part of any image; Docker Compose stays the
+       documented way to run the stack. Target framework, nullable etc. come from Directory.Build.props. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AspireUseCliBundle>true</AspireUseCliBundle>
+    <UserSecretsId>docviewer-apphost-7c1f3a52</UserSecretsId>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DocViewer.Api\DocViewer.Api.csproj" />
+    <ProjectReference Include="..\..\mocks\SalesSystem.Mock\SalesSystem.Mock.csproj" />
+    <ProjectReference Include="..\..\mocks\ServiceSystem.Mock\ServiceSystem.Mock.csproj" />
+    <ProjectReference Include="..\..\frontend\DocViewer.Web\DocViewer.Web.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" />
+    <PackageReference Include="Aspire.Hosting.Redis" />
+    <PackageReference Include="MessagePack" /> <!-- security pin, see Directory.Packages.props -->
+  </ItemGroup>
+</Project>
