@@ -535,7 +535,14 @@ Evidence for the brief's "AI Engineering & Verification" criterion. Record **eve
 - **How it was caught:** A second check printed the actual per-run result lines; the cold-start request was read from the API's own log, not inferred.
 - **Correction:** E-019 and E-020. Lesson: before trusting "0 failures", make the check fail once on purpose; the mutation runs in this fix do exactly that.
 
-<!-- Add new AI corrections above this line, continuing from AI-016. -->
+### AI-016: Agent updated the contract docs but not the design sections, and missed a budget arithmetic
+- **Date / phase:** 2026-10-30 · docs
+- **AI output:** For D-024…D-031 the agent updated SYSTEMS.md, the README and the API parts of DESIGN.md (§7, §10 breaker row, §16, §17), and reported the work as documented.
+- **Problem:** DESIGN's data flow (§6.2), resilience (§10), caching (§11), observability (§12) and security (§13) sections still described the old behaviour: no dependency budgets, snapshots saved only when every source succeeded (never true in the code), fallback after merge, a `SemaphoreSlim` single-flight (replaced in D-020), "min 5 calls" in the breaker diagram, rate limiting as "future", pagination as future work. Adding the budgets also pushed the theoretical worst case to ~2.45 s, above invariant 5's ~2.2 s, which the agent had not raised.
+- **How it was caught:** Kumar asked whether DESIGN and SYSTEMS were updated; the agent searched DESIGN for every recent decision ID and change instead of answering from memory.
+- **Correction:** DESIGN 1.1 rewrites those sections; the worst case is stated as ~2.45 s and raised as Q5. Lesson: after a change, search the design for every statement it makes false, not only the sections named after the change.
+
+<!-- Add new AI corrections above this line, continuing from AI-017. -->
 
 ---
 
@@ -546,6 +553,7 @@ Evidence for the brief's "AI Engineering & Verification" criterion. Record **eve
 | Q1 | Do we need pagination for very long histories, or is a single list fine for the demo? | Kumar | Closed 2026-10-30 — opt-in keyset pagination (D-031) |
 | Q2 | Should stale fallback be disabled by config for audit-sensitive dealers? | Kumar | Open |
 | Q3 | `/readyz` returns 503 when the database is down (DESIGN §7.1), but searches still work without it (invariant 10). Should readiness report DB loss as *degraded* (200) so a DB blip does not pull every instance from the load balancer? | Kumar | Closed 2026-10-28 — *degraded* (200), D-024 |
+| Q5 | Invariant 5 promises ~2.2 s, but with the E-018/E-019 budgets the theoretical worst case is cache read 0.15 s + sources 2.0 s + snapshot read 0.3 s ≈ 2.45 s (measured worst so far: 1.84 s). Restate the invariant as ~2.5 s (new decision), or shrink the budgets (e.g. 100 ms each, more cold misses)? | Kumar | Open (2026-10-30) |
 | Q4 | The Docker healthcheck probes `/readyz`, which after D-024 answers 200 whenever the process is up, so it now detects nothing more than `/healthz` while opening a database connection every 10 s. Switch the probe to `/healthz`? (D5.6 review) | Kumar | Open |
 | R3 | Raw VINs are stored at rest in the Redis cache key (`docs:v1:{VIN}`) and `source_snapshot.vin`; both need the VIN for lookup. D-011 hashes only the audit table. | — | Accepted risk, recorded in D5.6 |
 | R1 | Per-process breaker state across replicas (D-007) | — | Accepted risk |

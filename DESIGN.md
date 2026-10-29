@@ -1,7 +1,7 @@
 # Unified Document Viewer — System Design Document
 
 > Keyloop Technical Assessment · **Scenario D (Domain: Operate)**
-> Author: Kumar Abhik · Version 1.0 (submission) · Last updated: 2026-10-28
+> Author: Kumar Abhik · Version 1.1 · Last updated: 2026-10-30
 >
 > Companion docs: [ROADMAP.md](ROADMAP.md) (progress) · [SYSTEMS.md](SYSTEMS.md) (decisions & errors log) · [AGENTS.md](AGENTS.md) (rules for AI agents)
 
@@ -232,14 +232,16 @@ sequenceDiagram
 ### 6.2 Step by step
 
 1. **Input** — The user enters a VIN. The UI trims and upper-cases it, pre-validates the format, and calls the API with a `traceparent` header.
-2. **Validate** — The API re-validates (the server is the authority). Invalid ⇒ `400` problem response; no downstream calls.
-3. **Cache** — Look up `docs:v1:{VIN}`. Hit ⇒ return immediately with `cache: "HIT"` in the response meta and `X-Cache: HIT` header.
-4. **Fan-out** — On a miss, start both adapter calls and await them with `Task.WhenAll`. Each call goes through its source's Polly pipeline (total timeout 2 s, one retry on fast transient failure, circuit breaker).
+2. **Limit and validate** — More than 60 searches a minute from one client IP ⇒ `429` (D-028). The API re-validates the VIN, filters and page request (the server is the authority). Invalid ⇒ `400` problem response; no downstream calls.
+3. **Cache** — Look up `docs:v1:{VIN}`, giving up after 150 ms (a hung Redis is a miss, E-019). Hit ⇒ return immediately with `cache: "HIT"` and `X-Cache: HIT`.
+4. **Fan-out** — On a miss, join the in-flight fan-out for this VIN if there is one (D-020), else start both adapter calls and await them with `Task.WhenAll`. Each call goes through its source's Polly pipeline (total timeout 2 s, one retry on fast transient failure, circuit breaker).
 5. **Normalise** — Each adapter maps its payload to canonical `Document`s. Malformed records are skipped, counted (`adapter_records_dropped_total`) and logged with the record id — never fatal.
-6. **Merge & enrich** — Concatenate, compute `status` (VALID / EXPIRING_SOON / EXPIRED / NOT_APPLICABLE), detect duplicates and conflicts across sources, and sort deterministically.
-7. **Fallback** — For any failed source, load its last-known-good snapshot (≤ 24 h) from Postgres. If found, include those documents and mark the source `stale` with `asOf`.
-8. **Respond** — Build the response with `partial` and per-source status/latency/count.
-9. **Persist & cache** — If every source succeeded live, cache the response (60 s) and upsert snapshots. Always write one audit row. Persistence is fire-and-forget with a short timeout; a database outage must not fail the search.
+6. **Fallback** — For any failed source, read its last-known-good snapshot (≤ 24 h) from Postgres, giving up after 300 ms (E-018). If found in time, include those documents and mark the source `stale` with `asOf`; otherwise the original failure stands.
+7. **Merge & enrich** — Concatenate, compute `status` (VALID / EXPIRING_SOON / EXPIRED / NOT_APPLICABLE) against today in the dealership time zone (stale documents included), detect duplicates and conflicts across sources, and sort by `DocumentPosition` (D-012).
+8. **Cache & persist** — If every source answered live, write the cache (150 ms budget; a slow write finishes on its own). In the background, upsert the snapshot of **each** source that answered, even when the other failed, and write one audit row; a database outage never fails or delays the search.
+9. **Respond** — Apply filters, then the optional page (`limit`/`cursor`, D-031); `summary` counts the whole filtered result. Include `partial` and per-source status/latency/count.
+
+At start-up the API creates or migrates the schema and runs one snapshot lookup, so the first real fallback does not pay for a cold query (E-020).
 10. **Render** — The UI shows the merged list with source badges and, if `partial`, a banner naming the failed or stale system.
 
 ### 6.3 Failure-path matrix
@@ -251,7 +253,10 @@ sequenceDiagram
 | ok | timeout/error/open | no | 200 | true | Sales only; Service `status:"timeout"` etc. |
 | fail | fail | yes (either) | 200 | true | Stale data for failed sources, clearly labelled |
 | fail | fail | no | 503 | – | Problem response listing both source failures, `Retry-After: 5` |
-| – | – | – (invalid VIN) | 400 | – | Problem response, no downstream calls |
+| – | – | – (invalid VIN, filter or page) | 400 | – | Problem response, no downstream calls |
+| – | – | – (over 60 searches/min from one IP) | 429 | – | Problem response with `Retry-After`, no downstream calls (D-028) |
+| ok | ok | Redis down or hung | 200 | false | Normal answer from the sources; the cache read and write each give up after 150 ms (E-019) |
+| ok | fail | Postgres down or hung | 200 | true | As "no snapshot": the read gives up after 300 ms (E-018); `/readyz` says `Degraded` (D-024) |
 
 ## 7. API Contract
 
@@ -309,7 +314,8 @@ The spec states the canonical input (VIN pattern `^[A-HJ-NPR-Z0-9]{17}$`; filter
       "flags": [],
       "metadata": { "dealer": "Nexa Koramangala", "amount": "845000.00", "currency": "INR" }
     }
-  ]
+  ],
+  "nextCursor": null
 }
 ```
 
@@ -489,16 +495,20 @@ Total timeout (2 s) → Retry (max 1) → Circuit breaker → Attempt timeout (1
 | **Retry** | Max 1; only on `HttpRequestException` (connect failure) or 502 / 503 / 504; **not** on attempt timeout or open circuit; 100 ms jittered backoff. If the total timeout fires during the retry, the result is a timeout. | Absorbs blips without breaking the deadline (D-005) |
 | **Circuit breaker** | Per source, per process. Opens when ≥ 50 % of calls fail within a 10 s window with at least 3 calls (D-027; was 5); stays open 30 s; half-open allows one probe | Stops hammering a dead system and saves 2 s for users while it is down (D-014) |
 | **Stale fallback** | Snapshot ≤ 24 h from Postgres | Keeps the page useful during outages (D-003) |
+| **Dependency budgets** | Snapshot read 300 ms, each cache read/write 150 ms (`LatencyBudget` options); started on the thread pool so synchronous connect work counts too; Npgsql `Timeout=3;Command Timeout=5`, Redis `connectTimeout=2000,syncTimeout=1000,abortConnect=false` | A stopped Postgres or Redis made searches take ~12 s before (E-018, E-019) |
+| **Rate limit** | 60 searches/min per client IP, fixed window, no queue | Slows VIN enumeration and protects the sources (D-028) |
 | **Bulkhead** | One named `HttpClient` per source with its own `SocketsHttpHandler`, `MaxConnectionsPerServer = 50` | A slow source cannot exhaust connections for the other |
 | **Graceful degradation of infra** | Redis down ⇒ skip cache. Postgres down ⇒ skip snapshot/audit. Both logged and counted. | Supporting infrastructure must never take search down |
 | **Fail-fast validation** | Invalid VIN rejected before any I/O | Protects sources from junk traffic |
+
+**Worst-case latency.** Sources are bounded at 2.0 s (D-005), but the cache read (≤ 0.15 s) runs before them and the snapshot read (≤ 0.3 s) after a failure, so the theoretical worst case is about **2.45 s**, not the ~2.2 s invariant 5 states (open question Q5). Measured: 1.84 s with Postgres stopped and a source hanging, because timeouts are not retried; 0.32–0.63 s with Redis stopped.
 
 The adapter maps the outcome to a `SourceResult`: `TimeoutRejectedException` / `OperationCanceledException` from the pipeline ⇒ `timeout`; `BrokenCircuitException` ⇒ `circuit_open`; other HTTP or parse failures ⇒ `error`. Circuit state is observed through Polly's `CircuitBreakerStateProvider` for `/api/v1/sources/health`.
 
 Circuit breaker states:
 
 ```
-CLOSED --≥50% failures (min 5 calls / 10 s)--> OPEN --30 s--> HALF_OPEN --probe ok--> CLOSED
+CLOSED --≥50% failures (min 3 calls / 10 s)--> OPEN --30 s--> HALF_OPEN --probe ok--> CLOSED
                                                  ^                 |
                                                  +---probe fails---+
 ```
@@ -512,7 +522,8 @@ CLOSED --≥50% failures (min 5 calls / 10 s)--> OPEN --30 s--> HALF_OPEN --prob
 | TTL | 60 s (`CACHE_TTL_SECONDS`) |
 | Backend | `IDistributedCache`: `AddDistributedMemoryCache` by default; `AddStackExchangeRedisCache` when `ConnectionStrings:Redis` is set (shared across replicas). Wrapped by `IDocumentCache`, which serialises with `System.Text.Json` |
 | Bypass | `?refresh=true` |
-| Stampede | Per-key `SemaphoreSlim` (single-flight) so concurrent misses for one VIN do a single fan-out per process |
+| Stampede | Concurrent misses for one VIN share the in-flight fan-out task (D-020), per process |
+| Budget | Each read and write gives up after 150 ms; a timeout is a miss (E-019) |
 | Why not `HybridCache` | It caches whatever the factory returns; it cannot decide *after* the call that a partial result must not be stored (D-015) |
 | Not cached | Partial responses, 4xx/5xx |
 
@@ -535,6 +546,8 @@ One **access log** line per request plus one line per **source call**. Standard 
 | `sources` | `{"SALES":{"status":"ok","ms":118,"count":4},"SERVICE":{...}}` |
 | `dropped_records` | per source, with reasons |
 
+Successful probe and scrape requests (`/healthz`, `/readyz`, `/metrics`) are not access-logged; failures still are. The UI's nginx logs the path only, never the query string, because deep links carry the VIN (`/?vin=…`, E-017).
+
 Raw VINs never appear in logs (§13). Two mechanisms enforce it (E-007): the access log records the route template (`/api/v1/vehicles/{vin}/documents`), and an enricher drops the `RequestPath` property that ASP.NET Core's per-request log scope would otherwise attach to every event.
 
 ### 12.2 Metrics — `System.Diagnostics.Metrics` + OpenTelemetry, exposed on `/metrics`
@@ -556,8 +569,8 @@ Custom instruments live on one `Meter("DocViewer")` in a `DocViewerMetrics` clas
 ### 12.3 Tracing — OpenTelemetry
 
 - Instrumentation for ASP.NET Core, HttpClient and EF Core. .NET propagates W3C `traceparent` by default, **UI → API → both mocks**, so one trace shows the parallel fan-out as two sibling spans.
-- Manual spans from `ActivitySource("DocViewer")`: `aggregate`, `cache.get`, `source.sales`, `source.service`, `merge`, `snapshot.persist`.
-- Exporter: OTLP → Jaeger (compose profile `obs`) or the standalone **.NET Aspire dashboard** container (logs + traces + metrics in one UI); disabled in tests.
+- Manual spans from `ActivitySource("DocViewer")`: `aggregate`, `cache.get`, `source.sales`, `source.service`, `merge`, `snapshot.persist`, `audit.write` (screenshot: `docs/diagrams/jaeger-trace.png`).
+- Exporter: OTLP → Jaeger (compose profile `obs`) or the Aspire dashboard when run through `aspire/DocViewer.AppHost` (D-030); off when `OTEL_EXPORTER_OTLP_ENDPOINT` is unset (tests, `dotnet run`). Metrics are also pushed over OTLP only when `OTEL_METRICS_EXPORTER=otlp` (the AppHost sets it; Jaeger takes traces only).
 - The `traceId` is returned in the response body and the `X-Trace-Id` header, so a support ticket can quote it.
 - **Redaction:** HTTP spans record URLs, which contain the VIN. A `VinRedactionProcessor` masks every standalone 17-character alphanumeric token (valid VIN or not) in span tags and names before export (D-022, E-007).
 
@@ -579,7 +592,10 @@ Grafana dashboard JSON is committed under `infra/grafana/`.
 - **Error hygiene.** 500 responses carry a generic message plus `traceId`; stack traces only in logs.
 - **CORS** restricted to the UI origin.
 - **Future auth design.** OIDC (dealer SSO) → JWT bearer validated at the API; claims carry `dealer_id`; the aggregator passes dealer scope to sources so staff only see their dealership's vehicles; role `viewer` vs `admin` (admin may use `refresh`).
-- **Rate limiting (future).** Per-user token bucket in Redis to protect source systems.
+- **Rate limiting.** 60 searches per minute per client IP, `429` with `Retry-After`, no source called (D-028). Per replica and per IP: behind a proxy it needs forwarded headers; per-user limits need auth.
+- **Audit salt.** Required and validated at start-up; in `Production` the API refuses the salts published in this repository (D-029). Docker Compose runs as `Demo` so a clean clone works without secrets, and `Development` (which shows exception details) is never the compose default.
+- **VINs at rest.** Logs, spans, metrics and the audit table never hold a raw VIN; the Redis cache key and `source_snapshot.vin` do, because lookups need it (R3).
+- **Supply chain.** NuGet audit runs as an error; a vulnerable transitive package is pinned to its patched version, never suppressed (E-021).
 
 ## 14. Technology Choices
 
@@ -683,6 +699,8 @@ keyloop/
 
 All commands work the same on Windows, macOS and Linux; no `make` required.
 
+Compose runs the services in a `Demo` environment with local defaults, so a clean clone needs no `.env`. For a real deployment set `ASPNETCORE_ENVIRONMENT=Production` and a random `VIN_HASH_SALT` (D-029). The k6 load test and CI's contract fuzzing lift the per-IP search limit with `RATE_LIMIT_PER_MINUTE` (D-028).
+
 ## 18. Risks, Trade-offs and Future Work
 
 | Risk / trade-off | Mitigation / note |
@@ -692,8 +710,11 @@ All commands work the same on Windows, macOS and Linux; no `make` required.
 | Stale fallback can show outdated data | Labelled with `asOf`; capped at 24 h |
 | Two mocks are under our control, so they may be friendlier than real systems | Fault modes include malformed payloads and flakiness |
 | Scope creep in a 5-day timebox | Strict roadmap; Days 4–5 are explicitly optional extras |
+| Worst case can reach ~2.45 s with every dependency slow (§10) | Above the ~2.2 s of invariant 5; open question Q5 |
+| With Redis down there is no shared cache, so a popular VIN fans out about once per request per replica (R8) | Each fan-out is bounded by the breaker and D-005; a local in-memory fallback cache would cap it |
+| Raw VINs at rest in the cache key and snapshot table (R3) | Needed for lookups; hashing them would need a keyed lookup scheme |
 
-**Future work:** document file preview via signed URLs; OIDC auth and dealer scoping; pagination for vehicles with very long histories; async refresh via a message queue for slow sources (return cached, refresh in background); shared circuit state; Helm chart; more sources (Parts, Finance, OEM recall feeds) as new adapters.
+**Future work:** document file preview via signed URLs; OIDC auth and dealer scoping; async refresh via a message queue for slow sources (return cached, refresh in background); shared circuit state; Helm chart; more sources (Parts, Finance, OEM recall feeds) as new adapters.
 
 ## 19. How GenAI Was Used in the Design Phase
 
