@@ -7,7 +7,9 @@ name: docviewer
 x-dotnet-app: &dotnet-app
   restart: unless-stopped
   environment: &dotnet-env
-    ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+    # "Demo": not Development (no developer exception page) and not Production, which refuses the public
+    # demo salt below (D-029). Set Production plus a real VIN_HASH_SALT for anything beyond a local demo.
+    ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Demo}
 
 services:
   api:

@@ -5,8 +5,10 @@ using DocViewer.Api.Http;
 using DocViewer.Api.Observability;
 using DocViewer.Application;
 using DocViewer.Infrastructure;
+using DocViewer.Infrastructure.Options;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
 
 if (ContainerHealthCheck.IsRequested(args))
@@ -37,6 +39,7 @@ builder.Services.AddOpenApi(o => o.AddDocumentTransformer((document, _, _) =>
 }).AddOperationTransformer<DocumentParametersTransformer>().AddSchemaTransformer<OptionalWhenNullSchemaTransformer>());
 
 builder.Services.AddSearchRateLimiting();
+builder.Services.AddSingleton<IValidateOptions<PersistenceOptions>, ProductionSaltValidator>(); // D-029
 
 builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>(
     DatabaseHealthCheck.Name, failureStatus: HealthStatus.Degraded, tags: ["ready"], timeout: DatabaseHealthCheck.Timeout);

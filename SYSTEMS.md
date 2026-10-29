@@ -208,7 +208,14 @@ The project's memory. If it matters later, it goes here. Every agent and every h
 - **Alternatives:** sliding window or token bucket (smoother, harder to explain in a demo); per-API-key limits (needs auth, out of scope A8).
 - **Consequences:** Behind a reverse proxy every client shares the proxy's address until forwarded headers are configured (documented in `SearchRateLimiting`). With N replicas the limit is per replica. Verified in Docker: 65 searches ⇒ 60 × 200, 5 × 429, `Retry-After: 60`.
 
-<!-- Add new decisions above this line, continuing from D-029. -->
+### D-029: Production refuses the published demo salts; compose defaults to a `Demo` environment
+- **Date:** 2026-10-30 · **Status:** Accepted (Kumar: "refuse to start in Production") · Resolves R6
+- **Context:** Compose fell back to the public `local-demo-salt-change-me` even with `ASPNETCORE_ENVIRONMENT=Production`; with a known salt the audit hashes can be reversed for a known VIN range.
+- **Decision:** `ProductionSaltValidator` (an `IValidateOptions<PersistenceOptions>` in the Api) fails start-up in Production for the three salts published in this repo, or any salt containing `change-me`. Compose's default environment is `Demo`, not `Development` as first proposed: in .NET, Development also turns on the developer exception page, which would show stack traces to any client of the demo stack. Only Scalar is gated on Development, so Demo loses nothing else.
+- **Alternatives:** warn only (a forgotten setting still ships); default compose to Development (exception page, see above); generate a random salt per start (audit hashes would no longer match across restarts).
+- **Consequences:** `docker compose up` works with no `.env` as before; `.env.example` copied unchanged with `Production` fails fast with a message naming `VIN_HASH_SALT`. Verified in Docker both ways. Schema set-up and the snapshot warm-up run before options validation, so a refused start logs one extra warning first.
+
+<!-- Add new decisions above this line, continuing from D-030. -->
 
 ---
 
@@ -523,7 +530,7 @@ Evidence for the brief's "AI Engineering & Verification" criterion. Record **eve
 | R2 | Duplicate heuristic false positives (D-009) | — | Accepted risk, tested. 2026-10-29 review: the `(type, date)` fallback (`DocumentMerger.cs:63-64`) flags two **different** invoices or warranties from different sources issued the same day without a reference as `POSSIBLE_DUPLICATE` (flag only, nothing hidden). Matching by reference is exact after the `SV-{category}-` prefix is stripped (`ServiceAdapter.cs:112-117`), never a suffix match. |
 | R4 | The breaker needed ≥ 5 calls in 10 s, so at low traffic it never opened and each search to a dead source cost ~1.5 s (measured 2026-10-29: 8 timeouts, circuit stayed `closed`). | Kumar | Closed 2026-10-30 — min throughput 3 (D-027); opens by the 3rd search in the same experiment |
 | R5 | No rate limiting and no auth (A8): anyone who can reach the API could try VINs one after another and read every match. | Kumar | Closed 2026-10-30 — 60 searches/min per IP, 429 (D-028). Auth is still out of scope (A8), so a slow enumerator is only slowed, not stopped. |
-| R6 | The audit salt is required (`PersistenceOptions.cs:18-20`) and no real value is committed, but compose falls back to the public `local-demo-salt-change-me` (`docker-compose.yml:27`) even with `ASPNETCORE_ENVIRONMENT=Production`, and nothing rejects it. A forgotten setting makes the audit hashes guessable for a known VIN range. | Kumar | Open |
+| R6 | Compose fell back to the public demo salt even in Production, so a forgotten setting made the audit hashes guessable. | Kumar | Closed 2026-10-30 — Production refuses published salts; compose defaults to `Demo` (D-029) |
 | R7 | `partial` is explained only in the operation description; the `partial` and `sources[].status` fields have no description in `docs/openapi.json`. | — | Open, low |
 | R8 | Single-flight is per process (D-020). With Redis down, 20 requests for one VIN at 4/s caused 3 fan-outs on one replica (1 with Redis up); that was low only because the slow cache write kept the fan-out alive ~5.5 s. Since E-019 the write gives up after 150 ms, so with Redis down a popular VIN now fans out about once per non-overlapping request per replica (N replicas ⇒ N×). Each fan-out is bounded by the breaker and D-005. A local in-memory fallback cache would cap it; not built. | — | Accepted risk, updated 2026-10-30 |
 

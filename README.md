@@ -95,7 +95,7 @@ Add the observability stack (Prometheus :9090, Grafana :3000, Jaeger :16686):
 docker compose --profile obs up --build -d
 ```
 
-Stop everything with `docker compose --profile obs down` (add `-v` to delete the Postgres data). No `.env` file is needed; every setting has a local default (see [.env.example](.env.example) to override).
+Stop everything with `docker compose --profile obs down` (add `-v` to delete the Postgres data). No `.env` file is needed: compose runs in a `Demo` environment with local defaults (see [.env.example](.env.example) to override). For a real deployment set `ASPNETCORE_ENVIRONMENT=Production` **and** a random `VIN_HASH_SALT`; Production refuses to start with the public demo salt (D-029).
 
 ## 4. Quick start without Docker
 
