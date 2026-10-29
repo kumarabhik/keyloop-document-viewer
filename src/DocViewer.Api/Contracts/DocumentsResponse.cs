@@ -17,8 +17,13 @@ public sealed record DocumentsResponse(
     CacheStatus Cache,
     string TraceId,
     IReadOnlyList<SourceStatusResponse> Sources,
+    [property: Description("Counts over every document that matches the filters, on all pages together.")]
     DocumentSummary Summary,
-    IReadOnlyList<DocumentResponse> Documents);
+    IReadOnlyList<DocumentResponse> Documents,
+    [property: Description(
+        "Pass as `cursor` (with the same filters and `limit`) to get the next page. Null on the last page and whenever " +
+        "`limit` is not set (D-031).")]
+    string? NextCursor);
 
 public sealed record SourceStatusResponse(
     SourceSystem Name,

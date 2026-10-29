@@ -18,6 +18,9 @@ internal static class Problems
     public static ProblemHttpResult InvalidFilter(string detail, HttpContext context) =>
         TypedResults.Problem(detail, context.Request.Path, StatusCodes.Status400BadRequest, "Invalid filter", TypeBase + "invalid-filter");
 
+    public static ProblemHttpResult InvalidPage(string detail, HttpContext context) =>
+        TypedResults.Problem(detail, context.Request.Path, StatusCodes.Status400BadRequest, "Invalid page request", TypeBase + "invalid-page");
+
     public static ProblemHttpResult TooManyRequests(HttpContext context) =>
         TypedResults.Problem(
             "Too many searches from this client. Wait for the time in Retry-After, then try again.",

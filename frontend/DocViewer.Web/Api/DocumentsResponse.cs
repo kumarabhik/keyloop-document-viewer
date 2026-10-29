@@ -13,4 +13,5 @@ public sealed record DocumentsResponse(
     string TraceId,
     IReadOnlyList<SourceStatusResponse> Sources,
     DocumentSummary Summary,
-    IReadOnlyList<DocumentResponse> Documents);
+    IReadOnlyList<DocumentResponse> Documents,
+    string? NextCursor); // the UI loads full lists (no limit), so this is always null here (D-031)

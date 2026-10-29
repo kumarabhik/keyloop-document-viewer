@@ -1,0 +1,7 @@
+# Contract fuzzing config for the CI job `contract-fuzz` (D-026).
+#
+# `cursor` is an opaque token the API issues (D-031); no schema can say which strings are valid, so random strings
+# are rightly rejected with 400 and the fuzzer would call that "rejected a schema-compliant request". Send one valid
+# cursor instead: base64url of "v1|2026-01-01|Sales|FUZZ" (enum name, case-sensitive). Cursor parsing is covered by PaginationTests.
+[parameters]
+"query.cursor" = "djF8MjAyNi0wMS0wMXxTYWxlc3xGVVpa"

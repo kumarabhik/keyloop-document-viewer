@@ -17,7 +17,7 @@
 | Active day | Day 3 |
 | Next task | **Kumar:** (1) decide Q4 (healthcheck on `/healthz`?), (2) OK to tag `v1.1` (closes D5.6), (3) re-run k6 with minikube stopped (E-014, D5.4), (4) browser pass at :5173 (D4.6), (5) Jaeger screenshot (D3.3), (6) record the video from `docs/video-script.md` (D5.7). Agent work on the roadmap is otherwise done; backlog items remain optional |
 | Blockers | None |
-| Last updated | 2026-10-30 (Aspire AppHost; 350 tests green) |
+| Last updated | 2026-10-30 (pagination D-031; 365 tests green) |
 
 ## Progress Summary
 
@@ -192,7 +192,7 @@ Goal: a polished UI that shows the full user experience against the real API (or
 
 - [x] .NET Aspire AppHost: one-click local orchestration with the Aspire dashboard (logs, traces, metrics). — _2026-10-30: `aspire/DocViewer.AppHost` (Aspire 13.6.1, D-030); end-to-end test starts everything and makes a real search; MessagePack security pin (E-021). Dashboard view of traces/metrics not yet checked by eye._
 - [x] Contract fuzzing of the API against `docs/openapi.json` (e.g. Schemathesis in CI). — _2026-10-28: `contract-fuzz` CI job (D-026). Found and fixed a schema bug (E-016); spec now states the VIN pattern and filter enums. Local run: 1 390 requests, 0 issues._
-- [ ] Pagination for long histories (`limit`/`cursor`).
+- [x] Pagination for long histories (`limit`/`cursor`). — _2026-10-30: opt-in keyset pagination (D-031); no change without `limit`; fuzzing config sends a valid cursor; the UI still loads full lists._
 - [ ] Shared circuit-breaker state across replicas.
 - [ ] Background refresh of stale sources via a queue.
 - [ ] OIDC auth (JWT bearer) with dealer scoping.
@@ -206,6 +206,7 @@ Newest first. One entry per working session. Keep each entry short.
 
 | Date | Agent / person | Tasks touched | Outcome | Notes / next step |
 |---|---|---|---|---|
+| 2026-10-30 | Claude Code (with Kumar) | Backlog: pagination | Kumar chose opt-in keyset. D-012 order moved into `DocumentPosition` (merger and pager share it). `?limit`/`?cursor`, `nextCursor`, summary over the whole filtered result; 400 `invalid-page`. Fuzzing found the generated `limit` schema accepted "-64" (fixed, pinned by a test) and needs a valid cursor (schemathesis.toml). Two own mistakes caught before they counted: a test payload edit that matched nothing, and a hand-made cursor with the wrong enum spelling. Live: vehicle 8 pages 20+20+5 = 45, same order as unpaged. 365 tests green. | Rest of Current Focus unchanged. |
 | 2026-10-30 | Claude Code (with Kumar) | Backlog: Aspire AppHost | Kumar asked for the strongest backlog item. `aspire/DocViewer.AppHost` on Aspire 13.6.1 (13.6.x newer were < 2 weeks old); NuGet audit blocked MessagePack 2.5.302 (GHSA-qhrr-8q5h-9q3h) → pinned 2.5.307 (E-021). Verified live: `Healthy`, search from both sources, cache key in Redis, mocks + UI + CORS on the usual ports; images pinned to compose's (Aspire defaulted to Postgres 18.3 / Redis 8.6). End-to-end test (30 s) fails when the Postgres wiring is removed. Opt-in OTLP metrics for the dashboard. Not verified: traces/metrics by eye in the dashboard (its API needs a key). An over-broad container clean-up command was blocked by the safety check; only Aspire-labelled containers were touched afterwards (already gone). | Kumar: open the dashboard once and look at Traces/Metrics. Rest of Current Focus unchanged. |
 | 2026-10-29/30 | Claude Code (with Kumar) | Design-risk review, then fixes | Kumar's 8 risks checked against code and measured live: 2 high bugs (E-018 Postgres, E-019 Redis: searches ~12 s), gaps R4–R8, AI-014. Kumar chose: breaker min 3, 60/min rate limit, refuse demo salt in Production, commit+push per fix. Fixed one by one, each red test first, then Docker re-measure: snapshot budget 300 ms (1.84 s, was 11.8 s); cache budget 150 ms off-thread (0.32–0.63 s, was 11–12 s) + start-up warm-up; breaker opens by the 3rd search (D-027); 429 after 60 searches/min/IP (D-028); Production refuses demo salts, compose runs as `Demo` (D-029); spec describes `partial` (R7). Three timing-dependent tests fixed at the cause (E-020); CI caught one the agent missed. A wrong "0/10" logged as AI-015. 349 tests green. | Kumar's list in Current Focus is unchanged (Q4, tag, k6 re-run, browser pass, Jaeger screenshot, video). Note for k6: set `RATE_LIMIT_PER_MINUTE` first (README §7.1). |
 | 2026-10-28 (evening) | Claude Code (with Kumar) | D5.5, contract fuzzing, D5.6, D5.7 | Resumed from the Session Log as planned. D5.5 done: 6 real-Postgres tests (Testcontainers), run in CI; found the `jsonb` text difference (E-015). Contract fuzzing in CI (D-026): found and fixed a schema bug (E-016, AI-012); CI fuzz 2 934 requests, 0 issues. D5.6: code review → 9 fixes + Q4 for Kumar (AI-013); security pass found raw VINs in nginx logs, fixed (E-017); 0 raw VINs in any container log or metrics. D5.7: video script. 331 tests, coverage Domain 99.0 %, Application 98.4 %, Api 94.6 %, Infra 94.1 %, Web 91.3 %. All pushed to main. | Kumar's list in Current Focus (Q4, tag v1.1, k6 re-run, browser pass, Jaeger screenshot, video). |

@@ -15,6 +15,9 @@ GET {{api}}/api/v1/vehicles/{{vin}}/documents?refresh=true
 ### Only expired documents (vehicle #5 has an expired insurance policy)
 GET {{api}}/api/v1/vehicles/MA3EWB81S00100005/documents?status=EXPIRED
 
+### Pagination (opt-in): 20 per page; pass nextCursor back as cursor for the next page (D-031)
+GET {{api}}/api/v1/vehicles/MA3EWB81S00100008/documents?limit=20
+
 ### Filters can be combined and repeated
 GET {{api}}/api/v1/vehicles/{{vin}}/documents?source=SERVICE&type=PUC,JOB_CARD
 

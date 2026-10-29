@@ -106,7 +106,7 @@ internal sealed class MockApiHandler(TimeProvider timeProvider, ApiOptions optio
             documents.Count(d => d.Flags.Contains(WireValues.PossibleDuplicate)),
             documents.Count(d => d.Flags.Contains(WireValues.Conflict)));
         var body = new DocumentsResponse(vin.Value, sources.Any(s => !s.IsOk), timeProvider.GetUtcNow(),
-            CacheStatus(vin.Value, refresh, complete: sources.All(s => s.IsOk)), traceId, sources, summary, documents);
+            CacheStatus(vin.Value, refresh, complete: sources.All(s => s.IsOk)), traceId, sources, summary, documents, NextCursor: null);
 
         var response = Json(HttpStatusCode.OK, body, WebJsonContext.Default.DocumentsResponse);
         response.Headers.Add(DocumentsApiClient.TraceIdHeader, traceId);

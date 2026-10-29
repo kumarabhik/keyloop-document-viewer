@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json.Nodes;
 using DocViewer.Api.Contracts;
 using DocViewer.Domain;
@@ -39,6 +40,14 @@ internal sealed class DocumentParametersTransformer : IOpenApiOperationTransform
                     break;
                 case ("status", OpenApiSchema { Items: OpenApiSchema items }):
                     items.Enum = WireNames<DocumentStatus>();
+                    break;
+                case ("limit", OpenApiSchema limit):
+                    // The generator emits integer-or-string with a pattern that allows "-64"; minimum/maximum bind only
+                    // the integer branch, so the fuzzer sent -64 as "valid" (D-031). A page size is an integer.
+                    limit.Type = JsonSchemaType.Integer;
+                    limit.Pattern = null;
+                    limit.Minimum = "1";
+                    limit.Maximum = PageRequest.MaxLimit.ToString(CultureInfo.InvariantCulture);
                     break;
             }
         }

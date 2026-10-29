@@ -22,9 +22,7 @@ public static class DocumentMerger
 
         return withStatus
             .Select(d => matchedIds.TryGetValue(d.Id, out var others) ? Annotate(d, others) : d)
-            .OrderByDescending(d => d.Date)
-            .ThenBy(d => d.Source)
-            .ThenBy(d => d.SourceId, StringComparer.Ordinal)
+            .OrderBy(DocumentPosition.Of) // D-012, the same order pagination cursors use (D-031)
             .ToList();
     }
 

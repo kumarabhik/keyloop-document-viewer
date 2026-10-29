@@ -222,7 +222,14 @@ The project's memory. If it matters later, it goes here. Every agent and every h
 - **Alternatives:** make Aspire the only way to run (reviewers without Docker or the Aspire tooling would lose the simple path); `AddServiceDefaults` project (would duplicate our telemetry setup); Serilog OTLP sink for structured logs in the dashboard (one more package; console logs already show there).
 - **Consequences:** Docker Compose stays the documented primary path and the image build is unchanged. Compose and the AppHost cannot run at the same time (same ports). `DocViewer.AppHost.Tests` starts everything (~30 s) and fails if wiring breaks (checked by removing the Postgres connection string ⇒ `Degraded`).
 
-<!-- Add new decisions above this line, continuing from D-031. -->
+### D-031: Opt-in keyset pagination on the documents endpoint
+- **Date:** 2026-10-30 · **Status:** Accepted (Kumar) · Resolves Q1 · Refines D-021 (1)
+- **Context:** Long histories (seed vehicle 8: 45 documents) came back as one list. Q1 asked whether paging is needed.
+- **Decision:** Optional `?limit=1..100` and `?cursor=`. Without `limit` the response is unchanged apart from a new `nextCursor: null`. The cursor is opaque base64url of `v1|date|source|sourceId`, the last document's `DocumentPosition`; the D-012 order now lives in that one Domain type, used by both the merger and the pager. Filters apply before paging; `summary` counts the whole filtered result (identical to D-021 whenever `limit` is not used). Bad `limit`/`cursor` ⇒ 400 `invalid-page` before any source call. The Blazor UI keeps loading full lists, because its expiry alert counts the whole vehicle (D-025).
+- **Alternatives:** offset paging (a document added between pages shifts every later page; the test `NewDocumentBetweenPages…` shows the keyset does not); always paginate (breaks existing clients).
+- **Consequences:** Each page is its own search, usually a cache hit within 60 s. The fuzzer cannot know valid cursors, so `infra/schemathesis/schemathesis.toml` sends one valid cursor; parsing is covered by `PaginationTests`. The fuzzer also found the generated `limit` schema accepted `"-64"` (integer-or-string); `limit` is now integer-only, pinned by a contract test.
+
+<!-- Add new decisions above this line, continuing from D-032. -->
 
 ---
 
@@ -535,7 +542,7 @@ Evidence for the brief's "AI Engineering & Verification" criterion. Record **eve
 
 | # | Item | Owner | Status |
 |---|---|---|---|
-| Q1 | Do we need pagination for very long histories, or is a single list fine for the demo? | Kumar | Open — backlog |
+| Q1 | Do we need pagination for very long histories, or is a single list fine for the demo? | Kumar | Closed 2026-10-30 — opt-in keyset pagination (D-031) |
 | Q2 | Should stale fallback be disabled by config for audit-sensitive dealers? | Kumar | Open |
 | Q3 | `/readyz` returns 503 when the database is down (DESIGN §7.1), but searches still work without it (invariant 10). Should readiness report DB loss as *degraded* (200) so a DB blip does not pull every instance from the load balancer? | Kumar | Closed 2026-10-28 — *degraded* (200), D-024 |
 | Q4 | The Docker healthcheck probes `/readyz`, which after D-024 answers 200 whenever the process is up, so it now detects nothing more than `/healthz` while opening a database connection every 10 s. Switch the probe to `/healthz`? (D5.6 review) | Kumar | Open |

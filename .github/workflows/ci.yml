@@ -93,8 +93,8 @@ jobs:
           # The image runs as a non-root user; let it write the report into the runner-owned folder.
           mkdir -p schemathesis-report && chmod 777 schemathesis-report
           docker run --rm --network docviewer_default \
-            -v "$PWD/docs:/docs:ro" -v "$PWD/schemathesis-report:/report" \
-            schemathesis/schemathesis:4.31.1 run /docs/openapi.json \
+            -v "$PWD/docs:/docs:ro" -v "$PWD/schemathesis-report:/report" -v "$PWD/infra/schemathesis:/cfg:ro" \
+            schemathesis/schemathesis:4.31.1 --config-file /cfg/schemathesis.toml run /docs/openapi.json \
             --url http://api:8080 --checks all --exclude-checks negative_data_rejection \
             --max-time 90 --workers 2 --report junit --report-dir /report
       - name: API logs on failure

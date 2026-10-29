@@ -44,6 +44,8 @@ internal static class DocumentEndpoints
         [FromQuery, Description("Only these types, e.g. INSURANCE, PUC, JOB_CARD. Repeat or comma-separate.")] string[]? type,
         [FromQuery, Description("Only these statuses: VALID, EXPIRING_SOON, EXPIRED, NOT_APPLICABLE.")] string[]? status,
         [FromQuery, Description("true skips the cache read; a complete result is still cached.")] bool? refresh,
+        [FromQuery, Description("Optional page size, 1-100. Without it the whole list is returned (D-031).")] int? limit,
+        [FromQuery, Description("The nextCursor of the previous page, unchanged. Only meaningful with the same filters.")] string? cursor,
         AggregationService aggregation,
         HttpContext context,
         CancellationToken cancellationToken)
@@ -62,6 +64,11 @@ internal static class DocumentEndpoints
             return Problems.InvalidFilter(filterError, context);
         }
 
+        if (!PageRequest.TryCreate(limit, cursor, out var page, out var pageError))
+        {
+            return Problems.InvalidPage(pageError, context);
+        }
+
         var result = await aggregation.SearchAsync(new SearchRequest(parsed, refresh ?? false, traceId), cancellationToken);
         if (result.Outcome == SearchOutcome.Failed)
         {
@@ -69,7 +76,7 @@ internal static class DocumentEndpoints
         }
 
         context.Response.Headers[CacheHeader] = DocumentFilter.WireName(result.Cache);
-        return TypedResults.Ok(result.ToResponse(filter, traceId));
+        return TypedResults.Ok(result.ToResponse(filter, page, traceId));
     }
 
     internal static Ok<IReadOnlyList<SourceHealthResponse>> GetSourceHealth(ISourceHealth health, SourceActivity activity)

@@ -277,6 +277,8 @@ The spec states the canonical input (VIN pattern `^[A-HJ-NPR-Z0-9]{17}$`; filter
 | `type` | `INSURANCE` | Only this document type (repeatable) |
 | `status` | `EXPIRED` | Only this computed status (repeatable) |
 | `refresh` | `true` | Bypass the cache read (still writes) |
+| `limit` | `20` | Optional page size, 1–100. Without it the whole list is returned (D-031) |
+| `cursor` | `djF8…` | `nextCursor` of the previous page, unchanged; use the same filters and `limit` (D-031) |
 
 ### 7.2 Success response
 
@@ -316,7 +318,8 @@ The spec states the canonical input (VIN pattern `^[A-HJ-NPR-Z0-9]{17}$`; filter
 
 Details settled during implementation (D-021):
 
-- `summary` counts the documents **in this response**, i.e. after filters, so `summary.total == documents.length`.
+- `summary` counts every document that matches the filters, on all pages together (D-031). Without `limit` that is exactly the documents in the response, so `summary.total == documents.length` as before (D-021).
+- `nextCursor` is always present: `null` on the last page and whenever `limit` is not set. It is opaque keyset position (date, source, sourceId) in the D-012 order, so a document added between two requests never makes a later page repeat or skip one. A bad `limit` or `cursor` ⇒ 400 `invalid-page`, before any source is called.
 - A stale source keeps its original `error` (why it is stale) next to `asOf`.
 - Filters accept the wire names case-insensitively, repeated or comma-separated (`?type=PUC,INSURANCE`); unknown or numeric values ⇒ 400 `invalid-filter`.
 - Enum spelling: source and circuit states lower snake case (`circuit_open`, `half_open`); all other enums upper snake case (`EXPIRING_SOON`, `SALES`).

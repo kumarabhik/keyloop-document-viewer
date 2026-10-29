@@ -52,6 +52,18 @@ public sealed class OpenApiContractTests : IDisposable
     }
 
     [Fact]
+    public async Task LimitParameter_IsAnIntegerFrom1To100()
+    {
+        // D-031: the generator's integer-or-string schema let "-64" count as valid; the fuzzer found it.
+        var schema = Parameter(await DocumentAsync(), "limit")["schema"]!;
+
+        schema["type"]!.GetValue<string>().ShouldBe("integer");
+        schema["minimum"]!.GetValue<int>().ShouldBe(1);
+        schema["maximum"]!.GetValue<int>().ShouldBe(100);
+        schema["pattern"].ShouldBeNull();
+    }
+
+    [Fact]
     public async Task VinParameter_DocumentsTheCanonicalPattern()
     {
         Parameter(await DocumentAsync(), "vin")["schema"]!["pattern"]!.GetValue<string>().ShouldBe(DocumentParametersTransformer.VinPattern);

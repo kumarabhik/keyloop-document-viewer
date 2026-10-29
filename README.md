@@ -182,6 +182,11 @@ $r.documents | Format-Table source, type, title, expiryDate, status
 $r = Invoke-RestMethod http://localhost:8080/api/v1/vehicles/MA3EWB81S00100007/documents
 $r.documents | Format-Table source, type, title, expiryDate, @{ n = 'flags'; e = { $_.flags -join ',' } }
 
+# Pagination (opt-in, D-031): vehicle 8 has 45 documents; walk them 20 at a time
+$page = Invoke-RestMethod "http://localhost:8080/api/v1/vehicles/MA3EWB81S00100008/documents?limit=20"
+"$($page.documents.Count) of $($page.summary.total); next cursor: $($page.nextCursor)"
+$next = Invoke-RestMethod "http://localhost:8080/api/v1/vehicles/MA3EWB81S00100008/documents?limit=20&cursor=$($page.nextCursor)"
+
 # Filters (case-insensitive, repeatable or comma-separated)
 Invoke-RestMethod "http://localhost:8080/api/v1/vehicles/MA3EWB81S00100001/documents?source=SERVICE&type=PUC,JOB_CARD" |
   ForEach-Object documents | Format-Table source, type, title
@@ -230,7 +235,8 @@ It can also run with **no backend at all** in mock mode — see [frontend/README
 | `cache` | `HIT`, `MISS`, or `BYPASS` (`?refresh=true`) |
 | `traceId` | Same value as the `X-Trace-Id` header; find the request in logs and Jaeger with it |
 | `sources[]` | Per source: `status` (`ok`, `stale`, `timeout`, `error`, `circuit_open`), `latencyMs`, `count`, `error`, `asOf` (when stale) |
-| `summary` | Counts of the documents in this response: `total`, `expired`, `expiringSoon`, `duplicates`, `conflicts` |
+| `summary` | Counts over every document that matches the filters (all pages): `total`, `expired`, `expiringSoon`, `duplicates`, `conflicts` |
+| `nextCursor` | With `?limit=`: pass it as `?cursor=` for the next page; `null` on the last page or without `limit` |
 | `documents[]` | `source`, `type`, `title`, `date`, `expiryDate`, `status` (`VALID`, `EXPIRING_SOON`, `EXPIRED`, `NOT_APPLICABLE`), `flags` (`POSSIBLE_DUPLICATE`, `CONFLICT`), `metadata` |
 
 The full contract, with every status code and example, is [DESIGN.md §7](DESIGN.md#7-api-contract) and [docs/openapi.json](docs/openapi.json).
@@ -290,7 +296,7 @@ After three or more calls in ten seconds with at least half failing, a source's 
 
 ```bash
 dotnet build                          # warnings are errors; also regenerates docs/openapi.json
-dotnet test                           # all test projects (350 tests, ~1–2 min; needs Docker for 6 of them)
+dotnet test                           # all test projects (365 tests, ~1–2 min; needs Docker for 6 of them)
 dotnet format --verify-no-changes     # style check
 ```
 
@@ -418,9 +424,9 @@ The whole project was built with AI assistance: a chat assistant for the first-p
 
 ### 10.4 Quality: what the process produced
 
-- 350 automated tests plus contract fuzzing in CI; coverage Domain 99 %, Application 98 %, Infrastructure 94 %, Api 95 %, Web 91 % (gate: 85 % on Domain + Application).
+- 365 automated tests plus contract fuzzing in CI; coverage Domain 99 %, Application 98 %, Infrastructure 94 %, Api 95 %, Web 91 % (gate: 85 % on Domain + Application).
 - Every invariant in SYSTEMS.md §6 is guarded by a tagged test; every row of the failure matrix (DESIGN §6.3) is automated.
-- 30 recorded decisions, 21 recorded errors and 15 AI corrections, each dated and linked to code and tests.
+- 31 recorded decisions, 21 recorded errors and 15 AI corrections, each dated and linked to code and tests.
 - The submission runs from a clean clone with one command and no secrets.
 
 **What I learned about working with an agent:** it is fast and thorough when the target is written down and checkable, and it is most dangerous when it is confident about something nobody checked — a library default, a log format, a stack choice. The process above exists to turn those cases into failing tests or explicit questions as early as possible.
