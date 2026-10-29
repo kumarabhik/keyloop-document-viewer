@@ -379,9 +379,13 @@ public sealed class AggregationServiceTests : IDisposable
         });
         var service = CreateService(sales, FakeAdapter.Returning(SourceSystem.Service));
         using var cts = new CancellationTokenSource();
+        using var cacheLookups = _metrics.Collect<long>("docviewer.cache.requests");
 
         var cancelled = service.SearchAsync(Request(), cts.Token);
         var patient = service.SearchAsync(Request(), CancellationToken.None);
+        // Both must be waiting on the shared fan-out before one cancels (E-020: cache calls hop threads).
+        SpinWait.SpinUntil(() => cacheLookups.GetMeasurementSnapshot().Count(m => Equals(m.Tags["result"], "miss")) == 2, TimeSpan.FromSeconds(5))
+            .ShouldBeTrue();
         await cts.CancelAsync();
 
         await Should.ThrowAsync<OperationCanceledException>(() => cancelled);
