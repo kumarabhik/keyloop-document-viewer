@@ -513,5 +513,7 @@ public sealed class AggregationServiceTests : IDisposable
     private sealed class StubHealth(IReadOnlyList<SourceHealth> rows) : ISourceHealth
     {
         public IReadOnlyList<SourceHealth> GetHealth() => rows;
+
+        public Task<IReadOnlyList<SourceHealth>> ReadHealthAsync(CancellationToken cancellationToken) => Task.FromResult(GetHealth());
     }
 }

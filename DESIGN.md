@@ -493,7 +493,7 @@ Total timeout (2 s) → Retry (max 1) → Circuit breaker → Attempt timeout (1
 | **Total timeout** | 2.0 s per source, including any retry | Caps worst-case latency; user-facing budget (A5, D-005) |
 | **Attempt timeout** | 1.5 s per attempt; `SocketsHttpHandler.ConnectTimeout` 0.5 s | One slow attempt cannot use the whole budget |
 | **Retry** | Max 1; only on `HttpRequestException` (connect failure) or 502 / 503 / 504; **not** on attempt timeout or open circuit; 100 ms jittered backoff. If the total timeout fires during the retry, the result is a timeout. | Absorbs blips without breaking the deadline (D-005) |
-| **Circuit breaker** | Per source, per process. Opens when ≥ 50 % of calls fail within a 10 s window with at least 3 calls (D-027; was 5); stays open 30 s; half-open allows one probe | Stops hammering a dead system and saves 2 s for users while it is down (D-014) |
+| **Circuit breaker** | Per source, **shared by all replicas through Redis** when it is configured, per process otherwise (D-032). Opens when ≥ 50 % of calls fail within a 10 s window with at least 3 calls (D-027; was 5); stays open 30 s; half-open allows one probe, on any one replica. Each read/write of the shared state has a 50 ms budget; on a failure the replica uses its own state for 10 s | Stops hammering a dead system and saves 2 s for users while it is down (D-014); with N replicas, 3 failures in total open it, not 3 per replica |
 | **Stale fallback** | Snapshot ≤ 24 h from Postgres | Keeps the page useful during outages (D-003) |
 | **Dependency budgets** | Snapshot read 300 ms, each cache read/write 150 ms (`LatencyBudget` options); started on the thread pool so synchronous connect work counts too; Npgsql `Timeout=3;Command Timeout=5`, Redis `connectTimeout=2000,syncTimeout=1000,abortConnect=false` | A stopped Postgres or Redis made searches take ~12 s before (E-018, E-019) |
 | **Rate limit** | 60 searches/min per client IP, fixed window, no queue | Slows VIN enumeration and protects the sources (D-028) |
@@ -503,7 +503,9 @@ Total timeout (2 s) → Retry (max 1) → Circuit breaker → Attempt timeout (1
 
 **Worst-case latency.** Sources are bounded at 2.0 s (D-005), but the cache read (≤ 0.15 s) runs before them and the snapshot read (≤ 0.3 s) after a failure, so the theoretical worst case is about **2.45 s**, not the ~2.2 s invariant 5 states (open question Q5). Measured: 1.84 s with Postgres stopped and a source hanging, because timeouts are not retried; 0.32–0.63 s with Redis stopped.
 
-The adapter maps the outcome to a `SourceResult`: `TimeoutRejectedException` / `OperationCanceledException` from the pipeline ⇒ `timeout`; `BrokenCircuitException` ⇒ `circuit_open`; other HTTP or parse failures ⇒ `error`. Circuit state is observed through Polly's `CircuitBreakerStateProvider` for `/api/v1/sources/health`.
+The adapter maps the outcome to a `SourceResult`: `TimeoutRejectedException` / `OperationCanceledException` from the pipeline ⇒ `timeout`; `BrokenCircuitException` ⇒ `circuit_open`; other HTTP or parse failures ⇒ `error`.
+
+**Shared breaker (D-032).** The breaker is a small custom Polly strategy (`SharedCircuitBreakerStrategy`) with Polly's ratio rules and its state behind `ICircuitStateStore`: in memory, or Redis keys `docviewer:breaker:{source}:open` (open-until), `:window` (ten 1 s bucket counters, updated and summed by one Lua script) and `:probe` (`SET NX PX` lease, so only one replica probes). `/api/v1/sources/health` reads the store, so every replica reports a circuit any replica opened; the `docviewer.circuit.state` gauge shows what the process last saw. The Redis connection is opened at start-up, because a cold connect (~0.6 s) exceeded the 50 ms budget.
 
 Circuit breaker states:
 
@@ -705,7 +707,7 @@ Compose runs the services in a `Demo` environment with local defaults, so a clea
 
 | Risk / trade-off | Mitigation / note |
 |---|---|
-| Circuit breaker state is per process, so N replicas need N failures each to open | Acceptable at this scale; future: shared state in Redis |
+| Shared breaker state adds up to three Redis calls per source call | ~1 ms each; 50 ms budget each, and a failing Redis is skipped for 10 s, so the breaker degrades to per process (D-032) |
 | Duplicate detection is heuristic and may produce false positives | Flag-only, never hides data; key rules are unit-tested and easy to tune |
 | Stale fallback can show outdated data | Labelled with `asOf`; capped at 24 h |
 | Two mocks are under our control, so they may be friendlier than real systems | Fault modes include malformed payloads and flakiness |
@@ -714,7 +716,7 @@ Compose runs the services in a `Demo` environment with local defaults, so a clea
 | With Redis down there is no shared cache, so a popular VIN fans out about once per request per replica (R8) | Each fan-out is bounded by the breaker and D-005; a local in-memory fallback cache would cap it |
 | Raw VINs at rest in the cache key and snapshot table (R3) | Needed for lookups; hashing them would need a keyed lookup scheme |
 
-**Future work:** document file preview via signed URLs; OIDC auth and dealer scoping; async refresh via a message queue for slow sources (return cached, refresh in background); shared circuit state; Helm chart; more sources (Parts, Finance, OEM recall feeds) as new adapters.
+**Future work:** document file preview via signed URLs; OIDC auth and dealer scoping; async refresh via a message queue for slow sources (return cached, refresh in background); Helm chart; more sources (Parts, Finance, OEM recall feeds) as new adapters.
 
 ## 19. How GenAI Was Used in the Design Phase
 

@@ -193,7 +193,7 @@ Goal: a polished UI that shows the full user experience against the real API (or
 - [x] .NET Aspire AppHost: one-click local orchestration with the Aspire dashboard (logs, traces, metrics). — _2026-10-30: `aspire/DocViewer.AppHost` (Aspire 13.6.1, D-030); end-to-end test starts everything and makes a real search; MessagePack security pin (E-021). Dashboard view of traces/metrics not yet checked by eye._
 - [x] Contract fuzzing of the API against `docs/openapi.json` (e.g. Schemathesis in CI). — _2026-10-28: `contract-fuzz` CI job (D-026). Found and fixed a schema bug (E-016); spec now states the VIN pattern and filter enums. Local run: 1 390 requests, 0 issues._
 - [x] Pagination for long histories (`limit`/`cursor`). — _2026-10-30: opt-in keyset pagination (D-031); no change without `limit`; fuzzing config sends a valid cursor; the UI still loads full lists._
-- [ ] Shared circuit-breaker state across replicas.
+- [x] Shared circuit-breaker state across replicas. — _2026-10-31: full failure window in Redis (D-032), custom Polly strategy with D-014's rules, local fallback while Redis is down. Verified with two API containers: failures on one open the circuit on the other. A null-parsing bug found only by the real-Redis test (AI-017); a cold-connect budget miss found only live (E-022)._
 - [ ] Background refresh of stale sources via a queue.
 - [ ] OIDC auth (JWT bearer) with dealer scoping.
 - [ ] Helm chart.

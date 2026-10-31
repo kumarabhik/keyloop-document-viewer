@@ -8,13 +8,14 @@ namespace DocViewer.Infrastructure.Resilience;
 /// <summary>
 /// The per-source resilience pipeline from D-014, outermost first:
 /// total timeout → retry (max 1) → circuit breaker → attempt timeout.
+/// The breaker keeps D-014's rules but stores its state where replicas can share it (D-032).
 /// </summary>
 internal static class SourcePipeline
 {
     public static void Configure(
         ResiliencePipelineBuilder<HttpResponseMessage> builder,
         ResilienceOptions options,
-        Polly.CircuitBreaker.CircuitBreakerStateProvider stateProvider)
+        SharedCircuitBreakerStrategy breaker)
     {
         builder
             .AddTimeout(options.TotalTimeout)
@@ -27,14 +28,7 @@ internal static class SourcePipeline
                 ShouldHandle = args => ValueTask.FromResult(
                     options.MaxRetryAttempts > 0 && IsTransient(args.Outcome)),
             })
-            .AddCircuitBreaker(new HttpCircuitBreakerStrategyOptions
-            {
-                FailureRatio = options.BreakerFailureRatio,
-                MinimumThroughput = options.BreakerMinimumThroughput,
-                SamplingDuration = options.BreakerSamplingDuration,
-                BreakDuration = options.BreakerBreakDuration,
-                StateProvider = stateProvider,
-            })
+            .AddStrategy(_ => breaker)
             .AddTimeout(options.AttemptTimeout);
     }
 

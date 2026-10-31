@@ -1,29 +1,39 @@
+using System.Collections.Concurrent;
 using DocViewer.Application.Sources;
 using DocViewer.Domain;
-using Polly.CircuitBreaker;
-using PollyCircuitState = Polly.CircuitBreaker.CircuitState;
 
 namespace DocViewer.Infrastructure.Resilience;
 
 /// <summary>
-/// Holds one Polly <see cref="CircuitBreakerStateProvider"/> per source so circuit state can be
-/// observed outside the HTTP pipeline (health endpoint, metrics). Breaker state is per process (D-014).
+/// Circuit state per source for the health endpoint and the circuit gauge. <see cref="GetHealth"/> is what this process
+/// last saw (the gauge is synchronous); <see cref="ReadHealthAsync"/> asks the store, so with Redis it also shows a
+/// circuit another replica opened (D-032).
 /// </summary>
-public sealed class SourceCircuitRegistry : ISourceHealth
+internal sealed class SourceCircuitRegistry(ICircuitStateStore store, TimeProvider timeProvider) : ISourceHealth
 {
-    private readonly Dictionary<SourceSystem, CircuitBreakerStateProvider> _providers =
-        Enum.GetValues<SourceSystem>().ToDictionary(s => s, _ => new CircuitBreakerStateProvider());
+    private readonly ConcurrentDictionary<SourceSystem, CircuitState> _observed =
+        new(Enum.GetValues<SourceSystem>().ToDictionary(s => s, _ => CircuitState.Closed));
 
-    public CircuitBreakerStateProvider For(SourceSystem source) => _providers[source];
+    public void Observe(SourceSystem source, CircuitState state) => _observed[source] = state;
 
     public IReadOnlyList<SourceHealth> GetHealth() =>
-        _providers.Select(p => new SourceHealth(p.Key, Map(p.Value.CircuitState))).ToList();
+        [.. _observed.OrderBy(p => p.Key).Select(p => new SourceHealth(p.Key, p.Value))];
 
-    private static Application.Sources.CircuitState Map(PollyCircuitState state) => state switch
+    public async Task<IReadOnlyList<SourceHealth>> ReadHealthAsync(CancellationToken cancellationToken)
     {
-        PollyCircuitState.Open => Application.Sources.CircuitState.Open,
-        PollyCircuitState.HalfOpen => Application.Sources.CircuitState.HalfOpen,
-        PollyCircuitState.Isolated => Application.Sources.CircuitState.Isolated,
-        _ => Application.Sources.CircuitState.Closed,
-    };
+        var now = timeProvider.GetUtcNow();
+        foreach (var source in Enum.GetValues<SourceSystem>())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var openUntil = await store.GetOpenUntilAsync(source);
+            Observe(source, openUntil switch
+            {
+                null => CircuitState.Closed,
+                { } until when now < until => CircuitState.Open,
+                _ => CircuitState.HalfOpen,
+            });
+        }
+
+        return GetHealth();
+    }
 }

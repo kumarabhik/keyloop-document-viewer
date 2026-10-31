@@ -79,11 +79,12 @@ internal static class DocumentEndpoints
         return TypedResults.Ok(result.ToResponse(filter, page, traceId));
     }
 
-    internal static Ok<IReadOnlyList<SourceHealthResponse>> GetSourceHealth(ISourceHealth health, SourceActivity activity)
+    internal static async Task<Ok<IReadOnlyList<SourceHealthResponse>>> GetSourceHealth(
+        ISourceHealth health, SourceActivity activity, CancellationToken cancellationToken)
     {
         IReadOnlyList<SourceHealthResponse> rows =
         [
-            .. health.GetHealth().OrderBy(h => h.Source).Select(h =>
+            .. (await health.ReadHealthAsync(cancellationToken)).OrderBy(h => h.Source).Select(h =>
             {
                 var last = activity.LastFor(h.Source);
                 return new SourceHealthResponse(

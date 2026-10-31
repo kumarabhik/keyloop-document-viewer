@@ -43,6 +43,22 @@ internal static partial class StartupTasks
         }
 
         await WarmUpSnapshotReadAsync(app);
+        await WarmUpSharedCircuitStateAsync(app);
+    }
+
+    /// <summary>Connects to the shared breaker state before the first search (D-032). Best effort, at most 5 s.</summary>
+    private static async Task WarmUpSharedCircuitStateAsync(WebApplication app)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(app.Lifetime.ApplicationStopping);
+        timeout.CancelAfter(TimeSpan.FromSeconds(5));
+        try
+        {
+            await app.Services.WarmUpSharedCircuitStateAsync(timeout.Token);
+        }
+        catch (Exception ex) when (!app.Lifetime.ApplicationStopping.IsCancellationRequested)
+        {
+            LogSharedCircuitWarmUpFailed(app.Logger, ex); // the breaker falls back to local state (invariant 10)
+        }
     }
 
     /// <summary>
@@ -70,6 +86,9 @@ internal static partial class StartupTasks
 
     [LoggerMessage(EventId = 900, Level = LogLevel.Error, Message = "startup.database_init_failed; continuing without persistence")]
     private static partial void LogDatabaseInitFailed(ILogger logger, Exception exception);
+
+    [LoggerMessage(EventId = 901, Level = LogLevel.Warning, Message = "startup.shared_circuit_warmup_failed; breaker starts on local state")]
+    private static partial void LogSharedCircuitWarmUpFailed(ILogger logger, Exception exception);
 }
 
 /// <summary>Entry-assembly marker for <c>WebApplicationFactory</c> in tests.</summary>

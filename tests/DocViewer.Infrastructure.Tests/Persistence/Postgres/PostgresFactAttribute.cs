@@ -22,7 +22,7 @@ public sealed class PostgresFactAttribute : FactAttribute
     // A cheap check that a Docker engine endpoint exists; Testcontainers reports anything subtler itself. Covers the
     // default socket, Docker Desktop for macOS without the default-socket option, rootless Docker and a Docker context
     // (D5.6 review). A stale socket with no daemon makes the tests fail rather than skip, which is the louder outcome.
-    private static bool DockerLooksAvailable()
+    internal static bool DockerLooksAvailable()
     {
         if (Environment.GetEnvironmentVariable("DOCKER_HOST") is { Length: > 0 }
             || Environment.GetEnvironmentVariable("DOCKER_CONTEXT") is { Length: > 0 })

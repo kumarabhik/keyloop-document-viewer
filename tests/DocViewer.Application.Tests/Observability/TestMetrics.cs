@@ -26,5 +26,7 @@ internal sealed class TestMetrics : IDisposable
     private sealed class NoHealth : ISourceHealth
     {
         public IReadOnlyList<SourceHealth> GetHealth() => [];
+
+        public Task<IReadOnlyList<SourceHealth>> ReadHealthAsync(CancellationToken cancellationToken) => Task.FromResult(GetHealth());
     }
 }

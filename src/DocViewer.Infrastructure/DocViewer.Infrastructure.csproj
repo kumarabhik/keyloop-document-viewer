@@ -14,5 +14,6 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="DocViewer.Infrastructure.Tests" />
+    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" /> <!-- NSubstitute fakes of internal ports -->
   </ItemGroup>
 </Project>

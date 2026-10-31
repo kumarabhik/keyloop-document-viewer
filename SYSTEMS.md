@@ -229,7 +229,14 @@ The project's memory. If it matters later, it goes here. Every agent and every h
 - **Alternatives:** offset paging (a document added between pages shifts every later page; the test `NewDocumentBetweenPages…` shows the keyset does not); always paginate (breaks existing clients).
 - **Consequences:** Each page is its own search, usually a cache hit within 60 s. The fuzzer cannot know valid cursors, so `infra/schemathesis/schemathesis.toml` sends one valid cursor; parsing is covered by `PaginationTests`. The fuzzer also found the generated `limit` schema accepted `"-64"` (integer-or-string); `limit` is now integer-only, pinned by a contract test.
 
-<!-- Add new decisions above this line, continuing from D-032. -->
+### D-032: Breaker state shared across replicas through Redis (full failure window)
+- **Date:** 2026-10-31 · **Status:** Accepted (Kumar chose "share the full failure window" over "share only the open state") · Refines D-014 (rules unchanged) · Resolves R1
+- **Context:** Polly's breaker is per process (D-007/D-014): with N replicas a dead source needed 3 failures on each replica, and every replica paid the timeouts.
+- **Decision:** `SharedCircuitBreakerStrategy` (a custom Polly v8 strategy in place of `AddCircuitBreaker`) keeps D-014/D-027's rules (ratio 0.5, min 3 calls, 10 s window in ten buckets, 30 s break, one half-open probe, Polly's HTTP failure predicate) and keeps its state in `ICircuitStateStore`: in memory without Redis; with `ConnectionStrings:Redis`, Redis keys under one hash tag per source (`:open`, `:window` updated by one Lua script, `:probe` via `SET NX PX`). `FailoverCircuitStateStore` gives each Redis call 50 ms (`Resilience:SharedStateTimeoutMilliseconds`) and, on any failure, uses local state for 10 s (`SharedStateRetryAfterSeconds`). `/sources/health` reads the store. The connection is opened at start-up (E-022). Uses StackExchange.Redis, already present through the Redis cache package; tests add `Testcontainers.Redis` 4.16.0.
+- **Alternatives:** share only "open" (Kumar's pick was the fuller one); Polly's breaker plus a manual-control sync loop (two sources of truth); per-call `INCR` keys per bucket (several keys per call, not cluster-friendly).
+- **Consequences:** Up to three Redis round trips per source call (~1 ms each in Docker), all inside the 2 s source budget, so invariant 5 is unchanged. Replicas' clocks must roughly agree (buckets are epoch-based). A Redis outage makes the breaker per process again, never fails a call (invariant 10). Verified in Docker with two API containers: 3 failing searches on one ⇒ the other, which made no search, reports `open` and short-circuits.
+
+<!-- Add new decisions above this line, continuing from D-033. -->
 
 ---
 
@@ -392,7 +399,14 @@ Record anything that cost more than ~15 minutes, would bite someone again, or ch
 - **Fix:** Pinned `MessagePack` 2.5.307 (released 2026-10-03, the version newer Aspire ships) as a direct dependency of the AppHost, with a comment to drop it when Aspire is upgraded. Not suppressed.
 - **Prevention:** NuGet audit as an error did its job. Rule: never suppress NU190x; pin the patched transitive version instead.
 
-<!-- Add new errors above this line, continuing from E-022. -->
+### E-022: The first shared-breaker call missed its 50 ms budget, so a replica silently stopped sharing
+- **Date:** 2026-10-31 · **Task:** shared breaker (D-032) · **Severity:** medium
+- **Symptom:** Two API containers, Sales failing: three searches on one replica left one failure in Redis, and the other replica still reported `closed`. No test had failed.
+- **Root cause:** The first Redis call opens the connection (~0.6 s in Docker). The 50 ms budget expired, the store fell back to local state for 10 s, and the abandoned call landed later as the one failure. Same cold-start shape as E-019/E-020; tests used a 1 s budget on purpose (E-001), so they never saw it.
+- **Fix:** `WarmUpSharedCircuitStateAsync` at start-up (best effort, 5 s cap, logs `startup.shared_circuit_warmup_failed`). Re-measured: 3 failures in Redis, second replica `open` and short-circuiting, no fallback warnings.
+- **Prevention:** The two-container check is in the README's verification notes for D-032. Rule (again): a budget that is tight enough to matter must be checked on the real stack, cold.
+
+<!-- Add new errors above this line, continuing from E-023. -->
 
 ---
 
@@ -542,7 +556,14 @@ Evidence for the brief's "AI Engineering & Verification" criterion. Record **eve
 - **How it was caught:** Kumar asked whether DESIGN and SYSTEMS were updated; the agent searched DESIGN for every recent decision ID and change instead of answering from memory.
 - **Correction:** DESIGN 1.1 rewrites those sections; the worst case is stated as ~2.45 s and raised as Q5. Lesson: after a change, search the design for every statement it makes false, not only the sections named after the change.
 
-<!-- Add new AI corrections above this line, continuing from AI-017. -->
+### AI-017: Agent assumed a missing Redis key cannot parse as a number, and wrote two junk lines it then had to catch
+- **Date / phase:** 2026-10-31 · implementation (D-032)
+- **AI output:** (a) `value.TryParse(out long untilMs) ? … : null` for the open-until key. (b) A `Rejected` helper built around a meaningless `Outcome.FromResult(null!) is var _` expression, and a test line calling a non-existent `.ToAsync()`. (c) A fake-time test that advanced the clock in a loop until a task finished.
+- **Problem:** (a) `RedisValue.Null.TryParse(out long)` succeeds with 0, so every closed circuit read as "open until 1970" = half-open, and the first failure opened it: the shared breaker would have opened on one failure instead of three, on every replica. (b) Noise that compiled (or would have). (c) The loop outran the continuation and moved fake time 10 s, so the test failed for the wrong reason.
+- **How it was caught:** (a) the real-Redis Testcontainers test failed (the in-memory unit tests could not see it); a mutation run removing the fix makes two Redis tests fail. (b) the agent's own read of the diff before building. (c) the failure output named 10 s, not 50 ms.
+- **Correction:** `!value.IsNull &&` with a comment; helper rewritten; one `Advance` past the budget. Lesson: test a store against the real store; library "TryParse" semantics on null differ.
+
+<!-- Add new AI corrections above this line, continuing from AI-018. -->
 
 ---
 
@@ -556,7 +577,7 @@ Evidence for the brief's "AI Engineering & Verification" criterion. Record **eve
 | Q5 | Invariant 5 promises ~2.2 s, but with the E-018/E-019 budgets the theoretical worst case is cache read 0.15 s + sources 2.0 s + snapshot read 0.3 s ≈ 2.45 s (measured worst so far: 1.84 s). Restate the invariant as ~2.5 s (new decision), or shrink the budgets (e.g. 100 ms each, more cold misses)? | Kumar | Open (2026-10-30) |
 | Q4 | The Docker healthcheck probes `/readyz`, which after D-024 answers 200 whenever the process is up, so it now detects nothing more than `/healthz` while opening a database connection every 10 s. Switch the probe to `/healthz`? (D5.6 review) | Kumar | Open |
 | R3 | Raw VINs are stored at rest in the Redis cache key (`docs:v1:{VIN}`) and `source_snapshot.vin`; both need the VIN for lookup. D-011 hashes only the audit table. | — | Accepted risk, recorded in D5.6 |
-| R1 | Per-process breaker state across replicas (D-007) | — | Accepted risk |
+| R1 | Per-process breaker state across replicas (D-007) | Kumar | Closed 2026-10-31 — shared through Redis (D-032); per process again only while Redis is down |
 | R2 | Duplicate heuristic false positives (D-009) | — | Accepted risk, tested. 2026-10-29 review: the `(type, date)` fallback (`DocumentMerger.cs:63-64`) flags two **different** invoices or warranties from different sources issued the same day without a reference as `POSSIBLE_DUPLICATE` (flag only, nothing hidden). Matching by reference is exact after the `SV-{category}-` prefix is stripped (`ServiceAdapter.cs:112-117`), never a suffix match. |
 | R4 | The breaker needed ≥ 5 calls in 10 s, so at low traffic it never opened and each search to a dead source cost ~1.5 s (measured 2026-10-29: 8 timeouts, circuit stayed `closed`). | Kumar | Closed 2026-10-30 — min throughput 3 (D-027); opens by the 3rd search in the same experiment |
 | R5 | No rate limiting and no auth (A8): anyone who can reach the API could try VINs one after another and read every match. | Kumar | Closed 2026-10-30 — 60 searches/min per IP, 429 (D-028). Auth is still out of scope (A8), so a slow enumerator is only slowed, not stopped. |

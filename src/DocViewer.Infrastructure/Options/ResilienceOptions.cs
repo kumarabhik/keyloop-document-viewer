@@ -42,6 +42,20 @@ public sealed class ResilienceOptions : IValidatableObject
     [Range(0.5, 600)]
     public double BreakerBreakSeconds { get; set; } = 30;
 
+    /// <summary>
+    /// Budget for each read or write of the shared breaker state in Redis (D-032). Up to three such calls happen per source
+    /// call, all inside <see cref="TotalTimeoutSeconds"/>.
+    /// </summary>
+    [Range(5, 1000)]
+    public int SharedStateTimeoutMilliseconds { get; set; } = 50;
+
+    /// <summary>After a failed shared-state call, use local breaker state for this long before trying Redis again.</summary>
+    [Range(1, 600)]
+    public double SharedStateRetryAfterSeconds { get; set; } = 10;
+
+    public TimeSpan SharedStateTimeout => TimeSpan.FromMilliseconds(SharedStateTimeoutMilliseconds);
+    public TimeSpan SharedStateRetryAfter => TimeSpan.FromSeconds(SharedStateRetryAfterSeconds);
+
     public TimeSpan TotalTimeout => TimeSpan.FromSeconds(TotalTimeoutSeconds);
     public TimeSpan AttemptTimeout => TimeSpan.FromSeconds(AttemptTimeoutSeconds);
     public TimeSpan ConnectTimeout => TimeSpan.FromSeconds(ConnectTimeoutSeconds);

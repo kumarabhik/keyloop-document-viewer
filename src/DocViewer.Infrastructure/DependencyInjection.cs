@@ -23,6 +23,7 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration) =>
         services
             .AddSourceAdapters()
+            .AddSharedCircuitState(configuration)
             .AddDocumentCache(configuration)
             .AddPersistence(configuration);
 
@@ -35,6 +36,8 @@ public static class DependencyInjection
             .ValidateOnStart();
 
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<InMemoryCircuitStateStore>();
+        services.TryAddSingleton<ICircuitStateStore>(sp => sp.GetRequiredService<InMemoryCircuitStateStore>());
         services.TryAddSingleton<SourceCircuitRegistry>();
         services.TryAddSingleton<ISourceHealth>(sp => sp.GetRequiredService<SourceCircuitRegistry>());
 
@@ -45,6 +48,28 @@ public static class DependencyInjection
         AddSource<SalesAdapter>(services, SourceSystem.Sales);
         AddSource<ServiceAdapter>(services, SourceSystem.Service);
 
+        return services;
+    }
+
+    /// <summary>
+    /// Breaker state shared by every replica through Redis when <c>ConnectionStrings:Redis</c> is set, falling back to
+    /// this process's own state while Redis is unreachable (D-032). Without Redis the breaker stays per process.
+    /// </summary>
+    public static IServiceCollection AddSharedCircuitState(this IServiceCollection services, IConfiguration configuration)
+    {
+        var redis = configuration.GetConnectionString("Redis");
+        if (string.IsNullOrWhiteSpace(redis))
+        {
+            return services;
+        }
+
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<InMemoryCircuitStateStore>();
+        services.AddSingleton(_ => new RedisConnection(redis));
+        services.AddSingleton<RedisCircuitStateStore>();
+        services.RemoveAll<ICircuitStateStore>();
+        services.AddSingleton<ICircuitStateStore>(sp => ActivatorUtilities.CreateInstance<FailoverCircuitStateStore>(
+            sp, sp.GetRequiredService<RedisCircuitStateStore>()));
         return services;
     }
 
@@ -121,6 +146,19 @@ public static class DependencyInjection
         }
     }
 
+    /// <summary>
+    /// Opens the shared breaker's Redis connection and reads one key, so the first source call does not pay for the
+    /// connect: that took ~0.6 s in Docker, far over the 50 ms shared-state budget, and sent the replica to local state
+    /// for 10 s (D-032). No-op without Redis. Throws if Redis cannot be reached; the caller decides how long to wait.
+    /// </summary>
+    public static async Task WarmUpSharedCircuitStateAsync(this IServiceProvider services, CancellationToken cancellationToken = default)
+    {
+        if (services.GetService<RedisCircuitStateStore>() is { } redis)
+        {
+            await redis.GetOpenUntilAsync(SourceSystem.Sales).WaitAsync(cancellationToken);
+        }
+    }
+
     private static void AddSource<TAdapter>(IServiceCollection services, SourceSystem source)
         where TAdapter : class, ISourceAdapter
     {
@@ -153,8 +191,13 @@ public static class DependencyInjection
             .AddResilienceHandler($"{name.ToLowerInvariant()}-pipeline", (builder, context) =>
             {
                 var options = context.ServiceProvider.GetRequiredService<IOptions<ResilienceOptions>>().Value;
-                var circuits = context.ServiceProvider.GetRequiredService<SourceCircuitRegistry>();
-                SourcePipeline.Configure(builder, options, circuits.For(source));
+                var breaker = new SharedCircuitBreakerStrategy(
+                    source,
+                    context.ServiceProvider.GetRequiredService<ICircuitStateStore>(),
+                    context.ServiceProvider.GetRequiredService<SourceCircuitRegistry>(),
+                    options,
+                    context.ServiceProvider.GetRequiredService<TimeProvider>());
+                SourcePipeline.Configure(builder, options, breaker);
             });
 
         services.AddTransient<ISourceAdapter>(sp => sp.GetRequiredService<TAdapter>());
