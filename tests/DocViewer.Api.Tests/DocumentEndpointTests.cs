@@ -295,6 +295,38 @@ public sealed class DocumentEndpointTests : IDisposable
     }
 
     [Fact]
+    [Trait("Invariant", "10")]
+    public async Task DatabaseMissingAtStart_SchemaIsCreatedInTheBackground_OnceItAppears()
+    {
+        // E-024: on Kubernetes the API started before Postgres and never created its tables. Here the database folder
+        // does not exist at start-up (SQLite cannot open the file), and appears afterwards.
+        var folder = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"docviewer-late-db-{Guid.NewGuid():N}");
+        var file = System.IO.Path.Combine(folder, "late.db");
+        using var factory = _factory.WithWebHostBuilder(b => b
+            .UseSetting("ConnectionStrings:DocViewer", $"Data Source={file};Pooling=false")
+            .UseSetting("Persistence:SchemaRetrySeconds", "0.1"));
+        using var client = factory.CreateClient();
+        _factory.Logs.Events.ShouldContain(e => e.MessageTemplate.Text.StartsWith("startup.database_init_failed", StringComparison.Ordinal));
+
+        Directory.CreateDirectory(folder);
+        var waited = System.Diagnostics.Stopwatch.StartNew();
+        while (!Recovered() && waited.Elapsed < TimeSpan.FromSeconds(10))
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(50)); // real time: the retry runs on the host
+        }
+
+        Recovered().ShouldBeTrue();
+        await using var db = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={file};Pooling=false");
+        await db.OpenAsync();
+        await using var tables = db.CreateCommand();
+        tables.CommandText = "SELECT count(*) FROM sqlite_master WHERE name IN ('source_snapshot', 'search_audit')";
+        Convert.ToInt32(await tables.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture).ShouldBe(2);
+
+        bool Recovered() => _factory.Logs.Events.Any(e =>
+            e.RenderMessage(System.Globalization.CultureInfo.InvariantCulture).StartsWith("startup.retry_succeeded task=\"database\"", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task TooManySearchesFromOneClient_Get429ProblemWithRetryAfter_AndCallNoSource()
     {
         BothSourcesHealthy();

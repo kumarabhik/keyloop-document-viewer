@@ -19,5 +19,14 @@ public sealed class PersistenceOptions
     [MinLength(8)]
     public string VinHashSalt { get; set; } = string.Empty;
 
+    /// <summary>
+    /// First wait before retrying a schema set-up that failed at start-up; doubles up to 60 s (E-024). Without retries a
+    /// database that came up after the API (no start order in Kubernetes) left snapshots and audit off for good.
+    /// </summary>
+    [Range(0.05, 60)]
+    public double SchemaRetrySeconds { get; set; } = 5;
+
     public TimeSpan SnapshotMaxAge => TimeSpan.FromHours(SnapshotMaxAgeHours);
+
+    public TimeSpan SchemaRetry => TimeSpan.FromSeconds(SchemaRetrySeconds);
 }

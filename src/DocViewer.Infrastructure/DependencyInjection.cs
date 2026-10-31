@@ -147,15 +147,16 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// Opens the shared breaker's Redis connection and reads one key, so the first source call does not pay for the
-    /// connect: that took ~0.6 s in Docker, far over the 50 ms shared-state budget, and sent the replica to local state
-    /// for 10 s (D-032). No-op without Redis. Throws if Redis cannot be reached; the caller decides how long to wait.
+    /// Opens the shared breaker's Redis connection and runs each of its commands once on scratch keys, so the first
+    /// source call does not pay for the connect or a cold code path: those took ~0.6 s in Docker, far over the 50 ms
+    /// shared-state budget, and sent the replica to local state for 10 s (E-022, E-026). No-op without Redis. Throws if
+    /// Redis cannot be reached; the caller decides how long to wait and whether to retry.
     /// </summary>
     public static async Task WarmUpSharedCircuitStateAsync(this IServiceProvider services, CancellationToken cancellationToken = default)
     {
         if (services.GetService<RedisCircuitStateStore>() is { } redis)
         {
-            await redis.GetOpenUntilAsync(SourceSystem.Sales).WaitAsync(cancellationToken);
+            await redis.WarmUpAsync().WaitAsync(cancellationToken);
         }
     }
 
@@ -169,6 +170,10 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        // RemoveAllLoggers (below): IHttpClientFactory's logging handlers open a "HTTP GET {Uri}" scope, and every event
+        // logged inside the pipeline (Polly's retry and timeout warnings, the shared-breaker fallback) carried the source
+        // URL with the raw VIN (E-025, invariant 7). Their own request logs are Information and filtered out anyway;
+        // the adapters log each call with the masked VIN.
         services.AddHttpClient<TAdapter>((sp, client) =>
             {
                 var endpoint = sp.GetRequiredService<IOptionsMonitor<SourceEndpointOptions>>().Get(name);
@@ -177,6 +182,7 @@ public static class DependencyInjection
                 // Polly owns timeouts; this is only a backstop in case the pipeline is misconfigured.
                 client.Timeout = resilience.TotalTimeout + TimeSpan.FromSeconds(1);
             })
+            .RemoveAllLoggers()
             .ConfigurePrimaryHttpMessageHandler(sp =>
             {
                 var endpoint = sp.GetRequiredService<IOptionsMonitor<SourceEndpointOptions>>().Get(name);

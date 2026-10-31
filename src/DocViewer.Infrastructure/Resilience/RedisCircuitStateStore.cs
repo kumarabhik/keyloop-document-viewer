@@ -74,5 +74,21 @@ internal sealed class RedisCircuitStateStore(RedisConnection redis) : ICircuitSt
         return await db.StringSetAsync(Key(source, "probe"), now.ToUnixTimeMilliseconds(), lease, When.NotExists);
     }
 
-    internal static string Key(SourceSystem source, string part) => $"docviewer:breaker:{{{source.ToString().ToLowerInvariant()}}}:{part}";
+    /// <summary>
+    /// Runs every command this store uses once, on keys no circuit uses, then deletes them (E-026): connects, loads the
+    /// script into Redis's cache and JIT-compiles each path before the first source call depends on a 50 ms budget.
+    /// </summary>
+    public async Task WarmUpAsync()
+    {
+        var db = await redis.GetDatabaseAsync();
+        RedisKey[] keys = [Key("warmup", "open"), Key("warmup", "window"), Key("warmup", "probe")];
+        _ = await db.StringGetAsync(keys[0]);
+        _ = await db.ScriptEvaluateAsync(RecordScript, [keys[1]], [1, "s", 0, 1000]);
+        _ = await db.StringSetAsync(keys[2], 0, TimeSpan.FromSeconds(1), When.NotExists);
+        _ = await db.KeyDeleteAsync(keys);
+    }
+
+    internal static string Key(SourceSystem source, string part) => Key(source.ToString().ToLowerInvariant(), part);
+
+    private static string Key(string tag, string part) => $"docviewer:breaker:{{{tag}}}:{part}";
 }

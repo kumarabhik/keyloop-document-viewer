@@ -78,6 +78,21 @@ public sealed class SharedCircuitRedisTests(RedisContainer redis) : IAsyncLifeti
     }
 
     [RedisFact]
+    public async Task WarmUp_RunsEveryCommand_AndLeavesNoKeyOrCircuitBehind()
+    {
+        await using var connection = new RedisConnection(redis.ConnectionString);
+        var store = new RedisCircuitStateStore(connection);
+        await store.OpenAsync(SourceSystem.Sales, Now.AddSeconds(30), Now);
+
+        await store.WarmUpAsync();
+
+        var db = await connection.GetDatabaseAsync();
+        (await db.KeyExistsAsync("docviewer:breaker:{warmup}:window")).ShouldBeFalse();
+        (await db.KeyExistsAsync("docviewer:breaker:{warmup}:probe")).ShouldBeFalse();
+        (await store.GetOpenUntilAsync(SourceSystem.Sales)).ShouldBe(Now.AddSeconds(30)); // real circuits untouched
+    }
+
+    [RedisFact]
     public void Keys_ShareOneHashTagPerSource()
     {
         RedisCircuitStateStore.Key(SourceSystem.Sales, "open").ShouldBe("docviewer:breaker:{sales}:open");
@@ -88,8 +103,8 @@ public sealed class SharedCircuitRedisTests(RedisContainer redis) : IAsyncLifeti
     public async Task FailuresSeenByTwoReplicas_OpenTheCircuitOnBoth_WithoutFurtherHttpCalls()
     {
         RespondToSales(500);
-        var a = Replica(redis.ConnectionString);
-        var b = Replica(redis.ConnectionString);
+        var a = await ReplicaAsync(redis.ConnectionString);
+        var b = await ReplicaAsync(redis.ConnectionString);
 
         (await Sales(a).GetDocumentsAsync(Vin, CancellationToken.None)).Status.ShouldBe(SourceStatus.Error);
         (await Sales(b).GetDocumentsAsync(Vin, CancellationToken.None)).Status.ShouldBe(SourceStatus.Error);
@@ -100,7 +115,8 @@ public sealed class SharedCircuitRedisTests(RedisContainer redis) : IAsyncLifeti
         (await Sales(b).GetDocumentsAsync(Vin, CancellationToken.None)).Status.ShouldBe(SourceStatus.CircuitOpen);
         _sales.LogEntries.Count.ShouldBe(requests);
 
-        var health = await Replica(redis.ConnectionString).GetRequiredService<ISourceHealth>().ReadHealthAsync(CancellationToken.None);
+        var observer = await ReplicaAsync(redis.ConnectionString);
+        var health = await observer.GetRequiredService<ISourceHealth>().ReadHealthAsync(CancellationToken.None);
         health.Single(h => h.Source == SourceSystem.Sales).Circuit.ShouldBe(CircuitState.Open);
     }
 
@@ -109,7 +125,7 @@ public sealed class SharedCircuitRedisTests(RedisContainer redis) : IAsyncLifeti
     public async Task UnreachableRedis_LeavesEachReplicaWithItsOwnWorkingBreaker()
     {
         RespondToSales(500);
-        var replica = Replica("localhost:1,connectTimeout=200");
+        var replica = await ReplicaAsync("localhost:1,connectTimeout=200");
 
         for (var i = 0; i < 3; i++)
         {
@@ -126,7 +142,7 @@ public sealed class SharedCircuitRedisTests(RedisContainer redis) : IAsyncLifeti
     private static SalesAdapter Sales(ServiceProvider replica) => replica.GetRequiredService<SalesAdapter>();
 
     /// <summary>One API process's source adapters, configured as in production apart from shorter budgets.</summary>
-    private ServiceProvider Replica(string redisConnection)
+    private async Task<ServiceProvider> ReplicaAsync(string redisConnection)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -134,7 +150,10 @@ public sealed class SharedCircuitRedisTests(RedisContainer redis) : IAsyncLifeti
             ["Sources:Service:BaseUrl"] = "http://localhost:1",
             ["ConnectionStrings:Redis"] = redisConnection,
             ["Resilience:MaxRetryAttempts"] = "0",
-            // Generous: the first Redis call connects, and these tests are about sharing, not timing (E-001).
+            // Generous budgets: these tests are about sharing, not timing (E-001, E-005). A cold Redis connect plus the
+            // first HTTP call once used up the production 2 s source budget.
+            ["Resilience:TotalTimeoutSeconds"] = "10",
+            ["Resilience:AttemptTimeoutSeconds"] = "5",
             ["Resilience:SharedStateTimeoutMilliseconds"] = "1000",
         }).Build();
 
@@ -144,6 +163,11 @@ public sealed class SharedCircuitRedisTests(RedisContainer redis) : IAsyncLifeti
         services.AddSourceAdapters().AddSharedCircuitState(configuration);
         var provider = services.BuildServiceProvider();
         _replicas.Add(provider);
+        if (!redisConnection.StartsWith("localhost:1", StringComparison.Ordinal))
+        {
+            await provider.WarmUpSharedCircuitStateAsync(); // as the API does at start-up (E-026)
+        }
+
         return provider;
     }
 }
