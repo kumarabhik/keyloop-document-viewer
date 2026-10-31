@@ -7,6 +7,7 @@ using DocViewer.Application.Sources;
 using DocViewer.Domain;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace DocViewer.Api.Endpoints;
 
@@ -19,21 +20,31 @@ internal static class DocumentEndpoints
     public static RouteGroupBuilder MapDocumentEndpoints(this IEndpointRouteBuilder app)
     {
         var api = app.MapGroup("/api/v1").WithTags("Documents");
+        if (app.ServiceProvider.GetRequiredService<IOptions<AuthOptions>>().Value.Enabled)
+        {
+            api.RequireAuthorization(DealerAuthentication.PolicyName); // D-034
+        }
 
         api.MapGet("/vehicles/{vin}/documents", GetDocumentsAsync)
             .WithName(GetDocumentsOperation)
             .WithSummary("Documents for a vehicle from all source systems")
             .WithDescription(
                 "Calls the Sales and Service systems in parallel and returns one merged list. Each document names its source. " +
-                "If a source fails, the response is still 200 with partial=true; 503 only when no source answered and no snapshot exists.")
+                "If a source fails, the response is still 200 with partial=true; 503 only when no source answered and no snapshot exists. " +
+                "When auth is enabled (off by default), a bearer token is required and only documents of the token's dealer_id " +
+                "dealerships are returned; refresh=true then needs the admin role.")
             .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status429TooManyRequests)
             .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
             .RequireRateLimiting(SearchRateLimiting.PolicyName);
 
         api.MapGet("/sources/health", GetSourceHealth)
             .WithName("GetSourceHealth")
-            .WithSummary("Circuit-breaker state and last observed outcome per source");
+            .WithSummary("Circuit-breaker state and last observed outcome per source")
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden);
 
         return api;
     }
@@ -47,6 +58,7 @@ internal static class DocumentEndpoints
         [FromQuery, Description("Optional page size, 1-100. Without it the whole list is returned (D-031).")] int? limit,
         [FromQuery, Description("The nextCursor of the previous page, unchanged. Only meaningful with the same filters.")] string? cursor,
         AggregationService aggregation,
+        IOptions<AuthOptions> auth,
         HttpContext context,
         CancellationToken cancellationToken)
     {
@@ -69,7 +81,13 @@ internal static class DocumentEndpoints
             return Problems.InvalidPage(pageError, context);
         }
 
-        var result = await aggregation.SearchAsync(new SearchRequest(parsed, refresh ?? false, traceId), cancellationToken);
+        if (refresh == true && !DealerAuthentication.MayRefresh(context.User, auth.Value))
+        {
+            return Problems.RefreshForbidden(context);
+        }
+
+        var scope = DealerAuthentication.ScopeOf(context.User, auth.Value);
+        var result = await aggregation.SearchAsync(new SearchRequest(parsed, refresh ?? false, traceId, scope), cancellationToken);
         if (result.Outcome == SearchOutcome.Failed)
         {
             return Problems.SourcesUnavailable(result, context);

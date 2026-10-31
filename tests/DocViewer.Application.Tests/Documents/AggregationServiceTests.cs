@@ -528,4 +528,23 @@ public sealed class AggregationServiceTests : IDisposable
 
         public Task<IReadOnlyList<SourceHealth>> ReadHealthAsync(CancellationToken cancellationToken) => Task.FromResult(GetHealth());
     }
+
+    [Fact]
+    public async Task ScopedSearch_ReturnsTheDealersPart_EvenFromTheCache_WhichKeepsEverything()
+    {
+        var service = CreateService(
+            new FakeAdapter(SourceSystem.Sales, _ => Task.FromResult(SourceResult.Ok(
+                SourceSystem.Sales, [Doc("INV-1", SourceSystem.Sales) with { DealerCode = "NEXA-KOR" }], TimeSpan.Zero))),
+            new FakeAdapter(SourceSystem.Service, _ => Task.FromResult(SourceResult.Ok(
+                SourceSystem.Service, [Doc("JC-1", SourceSystem.Service) with { DealerCode = "NEXA-WFD" }], TimeSpan.Zero))));
+        var scope = new DealerScope(["NEXA-WFD"]);
+
+        var miss = await service.SearchAsync(Request() with { Scope = scope }, CancellationToken.None);
+        var hit = await service.SearchAsync(Request() with { Scope = scope }, CancellationToken.None);
+
+        miss.Documents.Documents.Select(d => d.SourceId).ShouldBe(["JC-1"]);
+        hit.Cache.ShouldBe(CacheStatus.Hit);
+        hit.Documents.Documents.Select(d => d.SourceId).ShouldBe(["JC-1"]);
+        _cache.Entries[TestVin].Documents.Count.ShouldBe(2); // cached unscoped, shared by every dealer
+    }
 }

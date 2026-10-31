@@ -3,7 +3,8 @@
     "vehicle": {
       "vin": "MA3EWB81S00100001",
       "model": "Baleno Alpha",
-      "soldOn": "2023-06-12"
+      "soldOn": "2023-06-12",
+      "dealerCode": "NEXA-KOR"
     },
     "documents": [
       {
@@ -56,7 +57,8 @@
     "vehicle": {
       "vin": "MA3EWB81S00100002",
       "model": "Swift ZXi",
-      "soldOn": "2024-01-05"
+      "soldOn": "2024-01-05",
+      "dealerCode": "NEXA-KOR"
     },
     "documents": [
       {
@@ -95,7 +97,8 @@
     "vehicle": {
       "vin": "MA3EWB81S00100005",
       "model": "Dzire VXi",
-      "soldOn": "2022-03-01"
+      "soldOn": "2022-03-01",
+      "dealerCode": "NEXA-WFD"
     },
     "documents": [
       {
@@ -134,7 +137,8 @@
     "vehicle": {
       "vin": "MA3EWB81S00100006",
       "model": "Baleno Alpha",
-      "soldOn": "2024-02-11"
+      "soldOn": "2024-02-11",
+      "dealerCode": "NEXA-KOR"
     },
     "documents": [
       {
@@ -163,7 +167,8 @@
     "vehicle": {
       "vin": "MA3EWB81S00100007",
       "model": "Brezza ZXi",
-      "soldOn": "2024-02-11"
+      "soldOn": "2024-02-11",
+      "dealerCode": "NEXA-KOR"
     },
     "documents": [
       {
@@ -194,7 +199,8 @@
     "vehicle": {
       "vin": "MA3EWB81S00100008",
       "model": "Ertiga VXi",
-      "soldOn": "2021-01-10"
+      "soldOn": "2021-01-10",
+      "dealerCode": "NEXA-KOR"
     },
     "documents": [
       {
@@ -361,7 +367,8 @@
     "vehicle": {
       "vin": "MA3EWB81S00100009",
       "model": "Celerio VXi",
-      "soldOn": "2023-09-09"
+      "soldOn": "2023-09-09",
+      "dealerCode": "NEXA-KOR"
     },
     "documents": [
       {
@@ -390,7 +397,8 @@
     "vehicle": {
       "vin": "MA3EWB81S00100010",
       "model": "Grand Vitara Zeta",
-      "soldOn": "2025-01-15"
+      "soldOn": "2025-01-15",
+      "dealerCode": "NEXA-KOR"
     },
     "documents": [
       {

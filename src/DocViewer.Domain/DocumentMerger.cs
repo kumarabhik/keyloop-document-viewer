@@ -63,6 +63,29 @@ public static class DocumentMerger
             : null;
     }
 
+    /// <summary>
+    /// Removes the duplicate/conflict marks <see cref="Merge"/> added, including the ids of the other documents, so a
+    /// subset of documents can be merged again on its own (dealer scoping, D-034: a mark must not reveal a document the
+    /// caller may not see).
+    /// </summary>
+    public static Document ClearCrossSourceMarks(Document document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        if (!document.Flags.Any(f => f is DocumentMarker.PossibleDuplicate or DocumentMarker.Conflict))
+        {
+            return document;
+        }
+
+        var metadata = new Dictionary<string, string>(document.Metadata);
+        metadata.Remove(DuplicateOfKey);
+        metadata.Remove(ConflictsWithKey);
+        return document with
+        {
+            Flags = [.. document.Flags.Where(f => f is not (DocumentMarker.PossibleDuplicate or DocumentMarker.Conflict))],
+            Metadata = metadata,
+        };
+    }
+
     private static Document Annotate(Document document, List<Document> others)
     {
         var sameDates = others.TrueForAll(o => o.Date == document.Date && o.ExpiryDate == document.ExpiryDate);

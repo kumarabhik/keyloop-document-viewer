@@ -36,9 +36,10 @@ builder.Services.AddOpenApi(o => o.AddDocumentTransformer((document, _, _) =>
         "One VIN search across the dealership's Sales and Service systems. Every document names its source; " +
         "a failing source makes the response partial (200), never an error.";
     return Task.CompletedTask;
-}).AddOperationTransformer<DocumentParametersTransformer>().AddSchemaTransformer<OptionalWhenNullSchemaTransformer>());
+}).AddDocumentTransformer<BearerSecurityTransformer>().AddOperationTransformer<DocumentParametersTransformer>().AddSchemaTransformer<OptionalWhenNullSchemaTransformer>());
 
 builder.Services.AddSearchRateLimiting();
+builder.Services.AddDealerAuthentication(builder.Configuration); // D-034; off unless Auth:Enabled
 if (!StartupTasks.IsGeneratingOpenApiDocument && builder.Configuration.GetValue("Refresh:Enabled", true))
 {
     builder.Services.AddHostedService<RefreshWorker>(); // D-033
@@ -63,6 +64,11 @@ app.UseTraceIdHeader();
 app.UseAccessLog();
 app.UseCors();
 app.UseRateLimiter(); // after the trace id, so a 429 problem carries one too
+if (DealerAuthentication.IsEnabled(app.Configuration))
+{
+    app.UseAuthentication(); // after the limiter: a flood of bad tokens is limited before any token is validated
+    app.UseAuthorization();
+}
 
 app.MapDocumentEndpoints();
 app.MapOpenApi(); // GET /openapi/v1.json

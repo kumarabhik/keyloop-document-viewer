@@ -188,4 +188,28 @@ public sealed class SalesAdapterTests : IDisposable
 
         result.Latency.ShouldBeGreaterThanOrEqualTo(TimeSpan.FromMilliseconds(140));
     }
+
+    [Fact]
+    public async Task VehicleDealerCode_IsTheDealerOfEverySalesDocument()
+    {
+        Respond(200, """
+            {"vehicle":{"vin":"MA3EWB81S00100006","dealerCode":" NEXA-KOR "},"documents":[
+              {"docId":"D1","docType":"SALE_INVOICE","title":"t","issuedOn":"2024-01-01"},
+              {"docId":"D2","docType":"REG_CERT","title":"t","issuedOn":"2024-01-02"}]}
+            """);
+
+        var result = await _adapter.GetDocumentsAsync(Vin, CancellationToken.None);
+
+        result.Documents.Select(d => d.DealerCode).ShouldBe(["NEXA-KOR", "NEXA-KOR"]);
+    }
+
+    [Fact]
+    public async Task MissingVehicleDealerCode_LeavesTheDealerUnknown()
+    {
+        Respond(200, """{"documents":[{"docId":"D1","docType":"SALE_INVOICE","title":"t","issuedOn":"2024-01-01"}]}""");
+
+        var result = await _adapter.GetDocumentsAsync(Vin, CancellationToken.None);
+
+        result.Documents.Single().DealerCode.ShouldBeNull();
+    }
 }

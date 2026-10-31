@@ -237,9 +237,23 @@ It can also run with **no backend at all** in mock mode — see [frontend/README
 | `sources[]` | Per source: `status` (`ok`, `stale`, `timeout`, `error`, `circuit_open`), `latencyMs`, `count`, `error`, `asOf` (when stale) |
 | `summary` | Counts over every document that matches the filters (all pages): `total`, `expired`, `expiringSoon`, `duplicates`, `conflicts` |
 | `nextCursor` | With `?limit=`: pass it as `?cursor=` for the next page; `null` on the last page or without `limit` |
-| `documents[]` | `source`, `type`, `title`, `date`, `expiryDate`, `status` (`VALID`, `EXPIRING_SOON`, `EXPIRED`, `NOT_APPLICABLE`), `flags` (`POSSIBLE_DUPLICATE`, `CONFLICT`), `metadata` |
+| `documents[]` | `source`, `type`, `title`, `date`, `expiryDate`, `status` (`VALID`, `EXPIRING_SOON`, `EXPIRED`, `NOT_APPLICABLE`), `flags` (`POSSIBLE_DUPLICATE`, `CONFLICT`), `metadata`, `dealerCode` |
 
 The full contract, with every status code and example, is [DESIGN.md §7](DESIGN.md#7-api-contract) and [docs/openapi.json](docs/openapi.json).
+
+### 5.6 Sign-in and dealer scoping (optional, off by default)
+
+The API can require an OIDC access token (D-034). It is off in every default setup, so the demo, the UI and the load test need no token. To turn it on, point the API at your identity provider (Keycloak, Entra ID, Auth0, ...):
+
+| Setting (environment variable) | Meaning |
+|---|---|
+| `Auth__Enabled=true` | Require a bearer token on every `/api/v1` call |
+| `Auth__Authority` | The issuer URL; the API reads its signing keys from `/.well-known/openid-configuration` |
+| `Auth__Audience` | The audience the tokens are issued for, e.g. `docviewer-api` |
+| `Auth__DealerClaim` (default `dealer_id`) | The claim naming a dealership the caller may see; repeat it for several |
+| `Auth__RoleClaim` / `Auth__AdminRole` (default `roles` / `admin`) | Who may use `?refresh=true` |
+
+In plain words: with sign-in on, a dealership's staff see only their dealership's documents. For a car sold by Koramangala (`NEXA-KOR`) but serviced in Whitefield (`NEXA-WFD`), Koramangala staff see the sales papers and Whitefield staff see the job cards (seed vehicle 5). Without a token the API answers 401; with a token but no `dealer_id`, 403. The demo UI has no sign-in yet, so run it with auth off.
 
 ## 6. Failure demo (fault injection)
 
@@ -434,6 +448,9 @@ The whole project was built with AI assistance: a chat assistant for the first-p
 | AI-013 | The agent's own Day 4–5 code, all tests green | 9 real bugs (time zone, race, timeout, mock gaps) and a raw VIN in nginx logs (E-017) | Independent code review + checking real container logs |
 | AI-014 | "Bounded at ~2.2 s" claimed, tested only for the sources | A stopped Redis or Postgres made searches take ~12 s (E-018, E-019) | Kumar's risk review, measured on the running stack |
 | AI-015 | "0 / 10 failures" from a check that could not see failures | The real rate was ~25 % | Printing the actual per-run results |
+| AI-016 | Contract docs updated, design sections not | DESIGN still described the old data flow, breaker and budgets | Kumar asked; every decision ID searched in DESIGN |
+| AI-017 | A missing Redis key assumed not to parse as a number | Closed circuits read as half-open: one failure would open the shared breaker | Real-Redis Testcontainers test; mutation run |
+| AI-018 | Auth tests written from memory (a wire field name), a refresh test with a timing race | Tests failing for the wrong reason, and one that could flake under load | Reading each failure message; a run with every project in parallel |
 
 ### 10.4 Quality: what the process produced
 

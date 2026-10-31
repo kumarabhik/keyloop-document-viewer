@@ -90,7 +90,7 @@ The brief is ambiguous in places. These are the assumptions made; each is also r
 | A5 | A **2-second per-source budget** is acceptable to users. | Typical dealer-system latency is well under 1 s; 2 s caps the worst case. |
 | A6 | Both source systems are owned by other teams and are **read-only** to us; they can be slow, flaky, or return malformed records. | Realistic integration assumption; drives the resilience design. |
 | A7 | Data can be up to **60 seconds stale** on a cache hit, and up to **24 hours stale** when served as a fallback while a source is down (clearly labelled). | Documents change rarely; availability beats freshness here. |
-| A8 | Authentication is out of scope for the assessment. | Listed as future work with a concrete design (§13). |
+| A8 | Authentication is optional and off by default (D-034); the demo, UI and load tests run without it. | Built as JWT bearer with dealer scoping (§13); turning it on needs an OIDC issuer. |
 | A9 | A VIN with **no documents in either system** returns **200 with an empty list**, not 404. | The collection exists but is empty; 404 would also be ambiguous with a wrong URL. See D-004. |
 | A10 | Date-only fields are calendar dates in dealership local time (IST); expiry is evaluated against "today" in that zone. | Avoids off-by-one expiry around midnight UTC. |
 
@@ -312,7 +312,8 @@ The spec states the canonical input (VIN pattern `^[A-HJ-NPR-Z0-9]{17}$`; filter
       "source": "SALES",
       "status": "NOT_APPLICABLE",
       "flags": [],
-      "metadata": { "dealer": "Nexa Koramangala", "amount": "845000.00", "currency": "INR" }
+      "metadata": { "dealer": "Nexa Koramangala", "amount": "845000.00", "currency": "INR" },
+      "dealerCode": "NEXA-KOR"
     }
   ],
   "nextCursor": null
@@ -348,6 +349,8 @@ Details settled during implementation (D-021):
 | Status | When |
 |---|---|
 | 400 | Invalid VIN format or invalid filter value |
+| 401 | Only with `Auth:Enabled`: no bearer token, or an invalid or expired one (D-034) |
+| 403 | Only with `Auth:Enabled`: the token has no `dealer_id` claim, or `refresh=true` without the `admin` role |
 | 200 | Success — complete, partial, stale, or empty |
 | 429 | More than `RateLimit:PermitsPerMinute` searches (default 60) from one client IP in a minute; `Retry-After` set; no source is called (R5) |
 | 503 | Both sources failed and no snapshot exists (`Retry-After` set) |
@@ -594,7 +597,7 @@ Grafana dashboard JSON is committed under `infra/grafana/`.
 - **No secrets in code**; configuration via `appsettings.json` + environment variables (`DocViewer__…`) bound to validated options classes (`ValidateDataAnnotations().ValidateOnStart()`); `dotnet user-secrets` for local secrets; `.env` git-ignored.
 - **Error hygiene.** 500 responses carry a generic message plus `traceId`; stack traces only in logs.
 - **CORS** restricted to the UI origin.
-- **Future auth design.** OIDC (dealer SSO) → JWT bearer validated at the API; claims carry `dealer_id`; the aggregator passes dealer scope to sources so staff only see their dealership's vehicles; role `viewer` vs `admin` (admin may use `refresh`).
+- **Authentication and dealer scoping (D-034).** Optional, off by default. With `Auth:Enabled=true` every `/api/v1` call needs a JWT bearer token from the configured OIDC issuer (`Auth:Authority`, `Auth:Audience`; keys from its discovery document) with at least one `dealer_id` claim (403 otherwise). Each document carries `dealerCode` (Sales: the selling dealer of the vehicle; Service: the workshop's dealer), and a caller sees only documents of its dealer codes; documents without one are hidden (fail closed). Duplicate/conflict marks and `sources[].count` are recomputed on the visible documents, so they never reveal a hidden one. The cache keeps the full result and is shared; scoping happens per request. `refresh=true` needs the `admin` role. Health, readiness, metrics and the OpenAPI document stay anonymous. Not yet: per-user rate limits, the dealer in the audit row, and a token flow in the demo UI.
 - **Rate limiting.** 60 searches per minute per client IP, `429` with `Retry-After`, no source called (D-028). Per replica and per IP: behind a proxy it needs forwarded headers; per-user limits need auth.
 - **Audit salt.** Required and validated at start-up; in `Production` the API refuses the salts published in this repository (D-029). Docker Compose runs as `Demo` so a clean clone works without secrets, and `Development` (which shows exception details) is never the compose default.
 - **VINs at rest.** Logs, spans, metrics and the audit table never hold a raw VIN; the Redis cache key and `source_snapshot.vin` do, because lookups need it (R3).
@@ -718,7 +721,7 @@ Compose runs the services in a `Demo` environment with local defaults, so a clea
 | With Redis down there is no shared cache, so a popular VIN fans out about once per request per replica (R8) | Each fan-out is bounded by the breaker and D-005; a local in-memory fallback cache would cap it |
 | Raw VINs at rest in the cache key and snapshot table (R3) | Needed for lookups; hashing them would need a keyed lookup scheme |
 
-**Future work:** document file preview via signed URLs; OIDC auth and dealer scoping; Helm chart; a durable broker (Redis Streams, a cloud queue) behind the refresh scheduler if refresh jobs must survive restarts or be shared across replicas; more sources (Parts, Finance, OEM recall feeds) as new adapters.
+**Future work:** document file preview via signed URLs; Helm chart; a sign-in flow in the demo UI and the dealer in the audit row (D-034); a durable broker (Redis Streams, a cloud queue) behind the refresh scheduler if refresh jobs must survive restarts or be shared across replicas; more sources (Parts, Finance, OEM recall feeds) as new adapters.
 
 ## 19. How GenAI Was Used in the Design Phase
 

@@ -153,4 +153,31 @@ public class DocumentMergerTests
         original.Metadata.ShouldBeEmpty();
         original.Flags.ShouldBeEmpty();
     }
+
+    [Fact]
+    public void ClearCrossSourceMarks_RemovesTheMarksAndTheOtherDocumentsIds_ButNothingElse()
+    {
+        var merged = Merge(
+            TestDocuments.Create("INV-1", SourceSystem.Sales, reference: "R1"),
+            TestDocuments.Create("SV-INV-R1", SourceSystem.Service, reference: "R1"));
+        var invoice = merged.Single(d => d.Source == SourceSystem.Sales) with
+        {
+            Metadata = new Dictionary<string, string>(merged.Single(d => d.Source == SourceSystem.Sales).Metadata) { ["dealer"] = "x" },
+        };
+        invoice.Flags.ShouldBe([DocumentMarker.PossibleDuplicate]);
+
+        var cleared = DocumentMerger.ClearCrossSourceMarks(invoice);
+
+        cleared.Flags.ShouldBeEmpty();
+        cleared.Metadata.Keys.ShouldBe(["dealer"]); // duplicateOf (the other document's id) is gone
+        cleared.Status.ShouldBe(invoice.Status);
+    }
+
+    [Fact]
+    public void ClearCrossSourceMarks_LeavesAnUnmarkedDocumentAsItIs()
+    {
+        var document = TestDocuments.Create("INV-1");
+
+        DocumentMerger.ClearCrossSourceMarks(document).ShouldBeSameAs(document);
+    }
 }

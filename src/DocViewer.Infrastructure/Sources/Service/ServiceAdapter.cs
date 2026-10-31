@@ -99,6 +99,7 @@ public sealed class ServiceAdapter(HttpClient httpClient, TimeProvider timeProvi
             Date = created,
             ExpiryDate = expiry,
             ReferenceNumber = ExtractReference(record.RecordNo, record.Category),
+            DealerCode = string.IsNullOrWhiteSpace(record.DealerCode) ? null : record.DealerCode.Trim(), // the workshop's dealer (D-034)
             Metadata = metadata,
         };
         reason = string.Empty;

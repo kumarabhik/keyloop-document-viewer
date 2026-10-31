@@ -20,6 +20,12 @@ public sealed record Document
     /// </summary>
     public string? ReferenceNumber { get; init; }
 
+    /// <summary>
+    /// The dealership the document belongs to (the selling dealer for Sales papers, the workshop's dealer for Service
+    /// records). Used for dealer scoping when auth is on (D-034); <c>null</c> when the source did not say.
+    /// </summary>
+    public string? DealerCode { get; init; }
+
     public IReadOnlyDictionary<string, string> Metadata { get; init; } = new Dictionary<string, string>();
     public DocumentStatus Status { get; init; } = DocumentStatus.NotApplicable;
     public IReadOnlyList<DocumentMarker> Flags { get; init; } = [];

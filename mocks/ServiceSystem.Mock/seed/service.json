@@ -8,6 +8,7 @@
         "created": "15/09/2023",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 1012
       },
       {
@@ -17,6 +18,7 @@
         "created": "20/03/2024",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 5230
       },
       {
@@ -26,6 +28,7 @@
         "created": "18/10/2024",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 10115
       },
       {
@@ -35,6 +38,7 @@
         "created": "{{today-60d}}",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 20240
       },
       {
@@ -44,6 +48,7 @@
         "created": "{{today-60d}}",
         "expiry": "{{today+120d}}",
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 0
       }
     ]
@@ -57,6 +62,7 @@
         "created": "02/02/2025",
         "expiry": null,
         "workshop": "Whitefield",
+        "dealer_code": "NEXA-WFD",
         "odometer_km": 18200
       },
       {
@@ -66,6 +72,7 @@
         "created": "11/04/2025",
         "expiry": null,
         "workshop": "Whitefield",
+        "dealer_code": "NEXA-WFD",
         "odometer_km": 20050
       },
       {
@@ -75,6 +82,7 @@
         "created": "{{today-30d}}",
         "expiry": "{{today+150d}}",
         "workshop": "Whitefield",
+        "dealer_code": "NEXA-WFD",
         "odometer_km": 0
       },
       {
@@ -84,6 +92,7 @@
         "created": "05/06/2025",
         "expiry": null,
         "workshop": "Whitefield",
+        "dealer_code": "NEXA-WFD",
         "odometer_km": 21900
       }
     ]
@@ -97,6 +106,7 @@
         "created": "{{today-170d}}",
         "expiry": "{{today+10d}}",
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 0
       },
       {
@@ -106,6 +116,7 @@
         "created": "{{today-90d}}",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 41200
       }
     ]
@@ -119,6 +130,7 @@
         "created": "11/02/2024",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 0
       },
       {
@@ -128,6 +140,7 @@
         "created": "15/05/2024",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 1012
       }
     ]
@@ -141,6 +154,7 @@
         "created": "11/02/2024",
         "expiry": "11/02/2028",
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 0
       },
       {
@@ -150,6 +164,7 @@
         "created": "20/05/2024",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 980
       }
     ]
@@ -163,6 +178,7 @@
         "created": "06/03/2021",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 2500
       },
       {
@@ -172,6 +188,7 @@
         "created": "30/04/2021",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 5000
       },
       {
@@ -181,6 +198,7 @@
         "created": "24/06/2021",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 7500
       },
       {
@@ -190,6 +208,7 @@
         "created": "18/08/2021",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 10000
       },
       {
@@ -199,6 +218,7 @@
         "created": "12/10/2021",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 12500
       },
       {
@@ -208,6 +228,7 @@
         "created": "06/12/2021",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 15000
       },
       {
@@ -217,6 +238,7 @@
         "created": "30/01/2022",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 17500
       },
       {
@@ -226,6 +248,7 @@
         "created": "26/03/2022",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 20000
       },
       {
@@ -235,6 +258,7 @@
         "created": "20/05/2022",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 22500
       },
       {
@@ -244,6 +268,7 @@
         "created": "14/07/2022",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 25000
       },
       {
@@ -253,6 +278,7 @@
         "created": "07/09/2022",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 27500
       },
       {
@@ -262,6 +288,7 @@
         "created": "01/11/2022",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 30000
       },
       {
@@ -271,6 +298,7 @@
         "created": "26/12/2022",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 32500
       },
       {
@@ -280,6 +308,7 @@
         "created": "19/02/2023",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 35000
       },
       {
@@ -289,6 +318,7 @@
         "created": "15/04/2023",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 37500
       },
       {
@@ -298,6 +328,7 @@
         "created": "09/06/2023",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 40000
       },
       {
@@ -307,6 +338,7 @@
         "created": "03/08/2023",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 42500
       },
       {
@@ -316,6 +348,7 @@
         "created": "27/09/2023",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 45000
       },
       {
@@ -325,6 +358,7 @@
         "created": "21/11/2023",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 47500
       },
       {
@@ -334,6 +368,7 @@
         "created": "15/01/2024",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 50000
       },
       {
@@ -343,6 +378,7 @@
         "created": "10/03/2024",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 52500
       },
       {
@@ -352,6 +388,7 @@
         "created": "04/05/2024",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 55000
       },
       {
@@ -361,6 +398,7 @@
         "created": "28/06/2024",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 57500
       },
       {
@@ -370,6 +408,7 @@
         "created": "22/08/2024",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 60000
       },
       {
@@ -379,6 +418,7 @@
         "created": "16/10/2024",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 62500
       },
       {
@@ -388,6 +428,7 @@
         "created": "10/12/2024",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 65000
       },
       {
@@ -397,6 +438,7 @@
         "created": "03/02/2025",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 67500
       },
       {
@@ -406,6 +448,7 @@
         "created": "30/03/2025",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 70000
       },
       {
@@ -415,6 +458,7 @@
         "created": "24/05/2025",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 72500
       },
       {
@@ -424,6 +468,7 @@
         "created": "18/07/2025",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 75000
       }
     ]
@@ -437,6 +482,7 @@
         "created": "12/12/2023",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 1100
       },
       {
@@ -446,6 +492,7 @@
         "created": "31/02/2024",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 3000
       },
       {
@@ -455,6 +502,7 @@
         "created": "14/09/2024",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 10020
       }
     ]
@@ -468,6 +516,7 @@
         "created": "15/01/2025",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 0
       },
       {
@@ -477,6 +526,7 @@
         "created": "15/01/2025",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 0
       },
       {
@@ -486,6 +536,7 @@
         "created": "20/10/2025",
         "expiry": null,
         "workshop": "Koramangala",
+        "dealer_code": "NEXA-KOR",
         "odometer_km": 10010
       }
     ]

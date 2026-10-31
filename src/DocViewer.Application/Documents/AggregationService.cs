@@ -237,6 +237,12 @@ public sealed partial class AggregationService(
 
     private SearchResult Finish(SearchRequest request, SearchResult result, long started, Activity? span)
     {
+        // The cache and the shared fan-out hold everything; each caller gets only its dealer's part (D-034).
+        if (request.Scope is { } scope)
+        {
+            result = result with { Documents = scope.Apply(result.Documents, calendar.Today, rules.Value.ExpiryWarningDays) };
+        }
+
         span?.SetTag("docviewer.outcome", result.Outcome.ToString())
             .SetTag("docviewer.cache", result.Cache.ToString())
             .SetTag("docviewer.document_count", result.Documents.Documents.Count);

@@ -51,4 +51,6 @@ public sealed record DocumentResponse(
     SourceSystem Source,
     DocumentStatus Status,
     IReadOnlyList<DocumentMarker> Flags,
-    IReadOnlyDictionary<string, string> Metadata);
+    IReadOnlyDictionary<string, string> Metadata,
+    [property: System.ComponentModel.Description("Dealership the document belongs to; null when the source system did not say (D-034).")]
+    string? DealerCode);

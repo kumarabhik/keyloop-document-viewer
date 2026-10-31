@@ -12,7 +12,7 @@
           "Documents"
         ],
         "summary": "Documents for a vehicle from all source systems",
-        "description": "Calls the Sales and Service systems in parallel and returns one merged list. Each document names its source. If a source fails, the response is still 200 with partial=true; 503 only when no source answered and no snapshot exists.",
+        "description": "Calls the Sales and Service systems in parallel and returns one merged list. Each document names its source. If a source fails, the response is still 200 with partial=true; 503 only when no source answered and no snapshot exists. When auth is enabled (off by default), a bearer token is required and only documents of the token's dealer_id dealerships are returned; refresh=true then needs the admin role.",
         "operationId": "GetVehicleDocuments",
         "parameters": [
           {
@@ -127,6 +127,26 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "429": {
             "description": "Too Many Requests",
             "content": {
@@ -147,7 +167,13 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          { },
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/sources/health": {
@@ -170,8 +196,34 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
-        }
+        },
+        "security": [
+          { },
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     }
   },
@@ -211,7 +263,8 @@
           "source",
           "status",
           "flags",
-          "metadata"
+          "metadata",
+          "dealerCode"
         ],
         "type": "object",
         "properties": {
@@ -258,6 +311,13 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "dealerCode": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Dealership the document belongs to; null when the source system did not say (D-034)."
           }
         }
       },
@@ -534,6 +594,14 @@
           "SALES",
           "SERVICE"
         ]
+      }
+    },
+    "securitySchemes": {
+      "Bearer": {
+        "type": "http",
+        "description": "Only when the API runs with Auth:Enabled=true (off by default): an OIDC access token whose dealer_id claims name the dealerships whose documents may be returned (D-034).",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
       }
     }
   },

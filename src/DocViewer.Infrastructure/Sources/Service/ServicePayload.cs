@@ -14,6 +14,7 @@ internal sealed record ServiceRecord(
     string? Created,
     string? Expiry,
     string? Workshop,
+    string? DealerCode,
     int? OdometerKm);
 
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]

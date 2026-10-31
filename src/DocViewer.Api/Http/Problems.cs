@@ -21,6 +21,14 @@ internal static class Problems
     public static ProblemHttpResult InvalidPage(string detail, HttpContext context) =>
         TypedResults.Problem(detail, context.Request.Path, StatusCodes.Status400BadRequest, "Invalid page request", TypeBase + "invalid-page");
 
+    public static ProblemHttpResult RefreshForbidden(HttpContext context) =>
+        TypedResults.Problem(
+            "refresh=true bypasses the cache and calls every source system; it needs the admin role.",
+            context.Request.Path,
+            StatusCodes.Status403Forbidden,
+            "Forbidden",
+            TypeBase + "forbidden");
+
     public static ProblemHttpResult TooManyRequests(HttpContext context) =>
         TypedResults.Problem(
             "Too many searches from this client. Wait for the time in Retry-After, then try again.",

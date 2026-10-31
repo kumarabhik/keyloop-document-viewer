@@ -8,7 +8,7 @@ namespace DocViewer.Infrastructure.Sources.Sales;
 
 internal sealed record SalesDocumentsResponse(SalesVehicle? Vehicle, List<SalesDocument>? Documents);
 
-internal sealed record SalesVehicle(string? Vin, string? Model, string? SoldOn);
+internal sealed record SalesVehicle(string? Vin, string? Model, string? SoldOn, string? DealerCode);
 
 internal sealed record SalesDocument(
     string? DocId,

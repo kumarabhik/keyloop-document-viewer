@@ -24,4 +24,17 @@ public class SeedStoreTests
 
         SeedStore.ResolveDateTokens(json, Today, "yyyy-MM-dd").ShouldBe("""{"a":"2026-10-26","b":"2026-10-28"}""");
     }
+
+    [Fact]
+    public void SeedData_NamesADealerForEveryDocument()
+    {
+        // Dealer scoping hides documents without a dealer code (D-034), so the demo data must name one everywhere.
+        var root = AppContext.BaseDirectory;
+        var sales = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(root, "seed", "sales.json")))!.AsObject();
+        var service = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(root, "seed", "service.json")))!.AsObject();
+
+        sales.Select(v => v.Value!["vehicle"]!["dealerCode"]?.GetValue<string>()).ShouldAllBe(c => !string.IsNullOrWhiteSpace(c));
+        service.SelectMany(v => v.Value!["records"]!.AsArray()).Select(r => r!["dealer_code"]?.GetValue<string>())
+            .ShouldAllBe(c => !string.IsNullOrWhiteSpace(c));
+    }
 }

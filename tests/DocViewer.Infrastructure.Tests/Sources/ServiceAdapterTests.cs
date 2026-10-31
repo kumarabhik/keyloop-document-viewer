@@ -147,4 +147,18 @@ public sealed class ServiceAdapterTests : IDisposable
     {
         ServiceAdapter.ExtractReference(recordNo, category).ShouldBe(expected);
     }
+
+    [Fact]
+    public async Task RecordDealerCode_IsTheDocumentsDealer()
+    {
+        Respond(200, """
+            {"records":[
+              {"record_no":"SV-JC-1","category":"JC","created":"01/01/2024","dealer_code":"NEXA-WFD"},
+              {"record_no":"SV-JC-2","category":"JC","created":"02/01/2024"}]}
+            """);
+
+        var result = await _adapter.GetDocumentsAsync(Vin, CancellationToken.None);
+
+        result.Documents.OrderBy(d => d.SourceId, StringComparer.Ordinal).Select(d => d.DealerCode).ShouldBe(["NEXA-WFD", null]);
+    }
 }

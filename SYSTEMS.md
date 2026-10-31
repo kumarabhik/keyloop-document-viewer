@@ -243,7 +243,14 @@ The project's memory. If it matters later, it goes here. Every agent and every h
 - **Alternatives:** Redis Streams (durable, shared; more code, and needs Redis to work); refreshing only the failed source and merging it with the other's snapshot (would label snapshot data as live).
 - **Consequences:** No new package. Jobs are per replica and lost on restart (the next partial search queues the VIN again). The healthy source is called up to 3 more times per partial VIN. API contract tests push the delay to 600 s so their request counts hold; `BackgroundRefreshApiTests` runs the real worker. Verified in Docker: Service hanging ⇒ partial (`stale`); healed; 8 s later, with no search in between, the next search was a complete `HIT`.
 
-<!-- Add new decisions above this line, continuing from D-034. -->
+### D-034: Optional OIDC bearer auth with per-document dealer scoping
+- **Date:** 2026-10-31 · **Status:** Accepted (Kumar: "off by default, document scope") · Changes A8 · Adds 401/403 and `dealerCode` to the contract
+- **Context:** No auth (A8): anyone who reached the API could read any vehicle's documents (R5 only slowed that down).
+- **Decision:** `Microsoft.AspNetCore.Authentication.JwtBearer` 10.0.14 (new package, approved). `Auth:Enabled` (default false); when on: JWT bearer from `Auth:Authority` for `Auth:Audience`, claim names kept as issued, policy requires a `dealer_id` claim on all of `/api/v1` (401/403 problems), `refresh=true` needs role `admin`; health, metrics and OpenAPI stay anonymous; validated on start (Authority and Audience required). Documents carry `DealerCode` (Sales: vehicle `dealerCode`, the selling dealer; Service: record `dealer_code`, the workshop's dealer); seed data names one everywhere. `DealerScope` (Application) keeps only the caller's dealers' documents, fail closed for documents without a code, scopes `sources[].count` and recomputes duplicate/conflict marks on the visible set (`DocumentMerger.ClearCrossSourceMarks`), since `duplicateOf` names the other document. Applied per response after the cache, which stays unscoped and shared. OpenAPI: optional bearer scheme (`security: [{}, {Bearer: []}]`, the spec is generated with auth off).
+- **Alternatives:** vehicle scope (Kumar picked document scope); on by default (needs an issuer for every demo and CI run); scope inside the adapters (would split the cache per dealer and hide duplicates the API should still know about).
+- **Consequences:** A document the source sends without a dealer code is invisible to every scoped caller, including old snapshots taken before this change (they refresh within a search). The demo UI does not sign in. Rate limits stay per IP. Verified by 16 API tests through the real JwtBearer handler with locally signed RS256 tokens (no network); not verified against a real identity provider.
+
+<!-- Add new decisions above this line, continuing from D-035. -->
 
 ---
 
@@ -437,7 +444,7 @@ Mirrors DESIGN.md §3. Change the status here if an assumption is revisited.
 | A5 | 2 s per-source budget is acceptable | Active (D-005) |
 | A6 | Sources are read-only, may be slow, flaky or malformed | Active |
 | A7 | 60 s staleness on cache hit; ≤ 24 h when served as labelled fallback | Active |
-| A8 | Auth out of scope | Active |
+| A8 | Auth optional, off by default | Changed 2026-10-31 (D-034) |
 | A9 | Empty result ⇒ 200 with empty list | Active (D-004) |
 | A10 | Dates are local (IST); expiry evaluated in that zone | Active |
 
@@ -577,7 +584,14 @@ Evidence for the brief's "AI Engineering & Verification" criterion. Record **eve
 - **How it was caught:** (a) the real-Redis Testcontainers test failed (the in-memory unit tests could not see it); a mutation run removing the fix makes two Redis tests fail. (b) the agent's own read of the diff before building. (c) the failure output named 10 s, not 50 ms.
 - **Correction:** `!value.IsNull &&` with a comment; helper rewritten; one `Advance` past the budget. Lesson: test a store against the real store; library "TryParse" semantics on null differ.
 
-<!-- Add new AI corrections above this line, continuing from AI-018. -->
+### AI-018: Auth and refresh tests written from memory, and one with a timing race
+- **Date / phase:** 2026-10-31 · testing (D-033, D-034)
+- **AI output:** (a) An auth test reading `sources[].documentCount` (the field is `count`). (b) A test helper that JSON-parsed every body, including `/healthz` (`Healthy`) and `/metrics`. (c) A stale source built with `SourceResult.Failed(…, Stale)`, which the type forbids. (d) `BackgroundRefreshApiTests` "healed" the mock with `Reset()` 1 s before the first refresh; under full parallel load the refresh could run first and `Reset` erased the evidence. It passed 6/6 alone and failed once in a full run. (e) A first version of that test polled with searches, which would have passed with no worker at all.
+- **Problem:** (a)–(c) failed for reasons unrelated to the feature; (d) a flaky test; (e) a test that could not fail.
+- **How it was caught:** each failure message read before any change; (d) by the full concurrent run; (e) by the agent's own review before running it, then a mutation (worker delayed 600 s) that must fail.
+- **Correction:** field names checked against the DTO; plain-text bodies not parsed; stale built as the aggregator does; the refresh test uses a WireMock scenario (500 then 200, no heal step) and waits on the cache itself. 6 concurrent full runs green afterwards. Lesson (again, AI-009): check names against the code, never from memory.
+
+<!-- Add new AI corrections above this line, continuing from AI-019. -->
 
 ---
 
@@ -594,7 +608,7 @@ Evidence for the brief's "AI Engineering & Verification" criterion. Record **eve
 | R1 | Per-process breaker state across replicas (D-007) | Kumar | Closed 2026-10-31 — shared through Redis (D-032); per process again only while Redis is down |
 | R2 | Duplicate heuristic false positives (D-009) | — | Accepted risk, tested. 2026-10-29 review: the `(type, date)` fallback (`DocumentMerger.cs:63-64`) flags two **different** invoices or warranties from different sources issued the same day without a reference as `POSSIBLE_DUPLICATE` (flag only, nothing hidden). Matching by reference is exact after the `SV-{category}-` prefix is stripped (`ServiceAdapter.cs:112-117`), never a suffix match. |
 | R4 | The breaker needed ≥ 5 calls in 10 s, so at low traffic it never opened and each search to a dead source cost ~1.5 s (measured 2026-10-29: 8 timeouts, circuit stayed `closed`). | Kumar | Closed 2026-10-30 — min throughput 3 (D-027); opens by the 3rd search in the same experiment |
-| R5 | No rate limiting and no auth (A8): anyone who can reach the API could try VINs one after another and read every match. | Kumar | Closed 2026-10-30 — 60 searches/min per IP, 429 (D-028). Auth is still out of scope (A8), so a slow enumerator is only slowed, not stopped. |
+| R5 | No rate limiting and no auth (A8): anyone who can reach the API could try VINs one after another and read every match. | Kumar | Closed 2026-10-30 — 60 searches/min per IP, 429 (D-028). Auth is still out of scope (A8), so a slow enumerator is only slowed, not stopped. 2026-10-31: optional dealer-scoped auth (D-034) stops it when turned on. |
 | R6 | Compose fell back to the public demo salt even in Production, so a forgotten setting made the audit hashes guessable. | Kumar | Closed 2026-10-30 — Production refuses published salts; compose defaults to `Demo` (D-029) |
 | R7 | `partial` was explained only in the operation description; the `partial` and `sources[].status` fields had no description in `docs/openapi.json`. | — | Closed 2026-10-30 — descriptions on `partial`, `sources[].status` and `asOf`; pinned by `OpenApiContractTests` |
 | R8 | Single-flight is per process (D-020). With Redis down, 20 requests for one VIN at 4/s caused 3 fan-outs on one replica (1 with Redis up); that was low only because the slow cache write kept the fan-out alive ~5.5 s. Since E-019 the write gives up after 150 ms, so with Redis down a popular VIN now fans out about once per non-overlapping request per replica (N replicas ⇒ N×). Each fan-out is bounded by the breaker and D-005. A local in-memory fallback cache would cap it; not built. | — | Accepted risk, updated 2026-10-30 |

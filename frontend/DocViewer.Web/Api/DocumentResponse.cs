@@ -11,4 +11,5 @@ public sealed record DocumentResponse(
     string Source,
     string Status,
     IReadOnlyList<string> Flags,
-    IReadOnlyDictionary<string, string> Metadata);
+    IReadOnlyDictionary<string, string> Metadata,
+    string? DealerCode = null); // D-034; the demo UI does not show it yet

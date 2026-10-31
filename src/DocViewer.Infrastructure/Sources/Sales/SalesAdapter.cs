@@ -41,7 +41,7 @@ public sealed class SalesAdapter(HttpClient httpClient, TimeProvider timeProvide
         var dropped = 0;
         foreach (var record in payload.Documents ?? [])
         {
-            if (TryMap(record, vin, out var document, out var reason))
+            if (TryMap(record, vin, payload.Vehicle?.DealerCode, out var document, out var reason))
             {
                 documents.Add(document);
             }
@@ -55,7 +55,8 @@ public sealed class SalesAdapter(HttpClient httpClient, TimeProvider timeProvide
         return new FetchedDocuments(documents, dropped);
     }
 
-    private bool TryMap(SalesDocument record, Vin vin, out Document document, out string reason)
+    /// <param name="dealerCode">The selling dealer, from the vehicle: it issued every Sales paper of the car (D-034).</param>
+    private bool TryMap(SalesDocument record, Vin vin, string? dealerCode, out Document document, out string reason)
     {
         document = null!;
 
@@ -99,6 +100,7 @@ public sealed class SalesAdapter(HttpClient httpClient, TimeProvider timeProvide
             Date = issued,
             ExpiryDate = expiry,
             ReferenceNumber = reference,
+            DealerCode = string.IsNullOrWhiteSpace(dealerCode) ? null : dealerCode.Trim(),
             Metadata = metadata,
         };
         reason = string.Empty;

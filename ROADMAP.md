@@ -195,7 +195,7 @@ Goal: a polished UI that shows the full user experience against the real API (or
 - [x] Pagination for long histories (`limit`/`cursor`). — _2026-10-30: opt-in keyset pagination (D-031); no change without `limit`; fuzzing config sends a valid cursor; the UI still loads full lists._
 - [x] Shared circuit-breaker state across replicas. — _2026-10-31: full failure window in Redis (D-032), custom Polly strategy with D-014's rules, local fallback while Redis is down. Verified with two API containers: failures on one open the circuit on the other. A null-parsing bug found only by the real-Redis test (AI-017); a cold-connect budget miss found only live (E-022)._
 - [x] Background refresh of stale sources via a queue. — _2026-10-31: in-process `Channel` scheduler (D-033); partial results retried after 5/15/45 s, complete result cached so the next search is a complete HIT; no audit row, not counted as a response. Verified in Docker. CI flake on the previous commit logged as E-023._
-- [ ] OIDC auth (JWT bearer) with dealer scoping.
+- [x] OIDC auth (JWT bearer) with dealer scoping. — _2026-10-31: optional, off by default (D-034); per-document dealer scope, fail closed, marks and counts recomputed so nothing hidden leaks; `refresh` needs `admin`. 16 API tests through the real JwtBearer handler; not tried against a real identity provider. The demo UI has no sign-in._
 - [ ] Helm chart.
 
 ---

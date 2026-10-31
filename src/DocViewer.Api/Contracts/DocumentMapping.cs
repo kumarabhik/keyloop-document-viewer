@@ -46,5 +46,5 @@ internal static class DocumentMapping
     }
 
     private static DocumentResponse ToResponse(Document d) =>
-        new(d.Id, d.SourceId, d.Vin.Value, d.Title, d.Type, d.Date, d.ExpiryDate, d.Source, d.Status, d.Flags, d.Metadata);
+        new(d.Id, d.SourceId, d.Vin.Value, d.Title, d.Type, d.Date, d.ExpiryDate, d.Source, d.Status, d.Flags, d.Metadata, d.DealerCode);
 }
