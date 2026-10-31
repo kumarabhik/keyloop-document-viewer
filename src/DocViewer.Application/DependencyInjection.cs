@@ -1,6 +1,7 @@
 using DocViewer.Application.Documents;
 using DocViewer.Application.Observability;
 using DocViewer.Application.Options;
+using DocViewer.Application.Refresh;
 using DocViewer.Application.Sources;
 using DocViewer.Application.Time;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,6 +28,11 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        services.AddOptions<RefreshOptions>()
+            .BindConfiguration(RefreshOptions.SectionName)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<DealershipCalendar>();
 
@@ -35,6 +41,10 @@ public static class DependencyInjection
 
         // Singleton: it owns the per-process single-flight map (D-020).
         services.TryAddSingleton<AggregationService>();
+
+        // D-033: the queue is filled by AggregationService; the host runs BackgroundRefresher.RunAsync.
+        services.TryAddSingleton<RefreshScheduler>();
+        services.TryAddSingleton<BackgroundRefresher>();
 
         return services;
     }

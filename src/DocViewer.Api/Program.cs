@@ -39,6 +39,10 @@ builder.Services.AddOpenApi(o => o.AddDocumentTransformer((document, _, _) =>
 }).AddOperationTransformer<DocumentParametersTransformer>().AddSchemaTransformer<OptionalWhenNullSchemaTransformer>());
 
 builder.Services.AddSearchRateLimiting();
+if (!StartupTasks.IsGeneratingOpenApiDocument && builder.Configuration.GetValue("Refresh:Enabled", true))
+{
+    builder.Services.AddHostedService<RefreshWorker>(); // D-033
+}
 builder.Services.AddSingleton<IValidateOptions<PersistenceOptions>, ProductionSaltValidator>(); // D-029
 
 builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>(

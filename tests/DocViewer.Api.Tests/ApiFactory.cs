@@ -47,6 +47,10 @@ public sealed class ApiFactory : WebApplicationFactory<ApiMarker>
         // false 503 — seen once on the first run after a build (E-005).
         builder.UseSetting("Resilience:AttemptTimeoutSeconds", "10");
         builder.UseSetting("Resilience:TotalTimeoutSeconds", "20");
+
+        // Background refresh (D-033) would call the WireMock sources again a few seconds after a partial result and
+        // change the request counts these tests assert. Its own test lowers the delay (BackgroundRefreshApiTests).
+        builder.UseSetting("Refresh:FirstDelaySeconds", "600");
     }
 
     public void SalesReturns(string vin, int status, string body) =>

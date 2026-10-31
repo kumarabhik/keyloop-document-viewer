@@ -194,7 +194,7 @@ Goal: a polished UI that shows the full user experience against the real API (or
 - [x] Contract fuzzing of the API against `docs/openapi.json` (e.g. Schemathesis in CI). — _2026-10-28: `contract-fuzz` CI job (D-026). Found and fixed a schema bug (E-016); spec now states the VIN pattern and filter enums. Local run: 1 390 requests, 0 issues._
 - [x] Pagination for long histories (`limit`/`cursor`). — _2026-10-30: opt-in keyset pagination (D-031); no change without `limit`; fuzzing config sends a valid cursor; the UI still loads full lists._
 - [x] Shared circuit-breaker state across replicas. — _2026-10-31: full failure window in Redis (D-032), custom Polly strategy with D-014's rules, local fallback while Redis is down. Verified with two API containers: failures on one open the circuit on the other. A null-parsing bug found only by the real-Redis test (AI-017); a cold-connect budget miss found only live (E-022)._
-- [ ] Background refresh of stale sources via a queue.
+- [x] Background refresh of stale sources via a queue. — _2026-10-31: in-process `Channel` scheduler (D-033); partial results retried after 5/15/45 s, complete result cached so the next search is a complete HIT; no audit row, not counted as a response. Verified in Docker. CI flake on the previous commit logged as E-023._
 - [ ] OIDC auth (JWT bearer) with dealer scoping.
 - [ ] Helm chart.
 

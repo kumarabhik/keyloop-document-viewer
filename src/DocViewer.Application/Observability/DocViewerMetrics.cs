@@ -20,6 +20,7 @@ public sealed class DocViewerMetrics
     private readonly Counter<long> _partialResponses;
     private readonly Counter<long> _staleServed;
     private readonly Counter<long> _recordsDropped;
+    private readonly Counter<long> _refreshJobs;
 
     public DocViewerMetrics(IMeterFactory meterFactory, ISourceHealth health)
     {
@@ -40,6 +41,9 @@ public sealed class DocViewerMetrics
             "docviewer.stale.served", "{response}", "Responses that used a last-known-good snapshot for a source.");
         _recordsDropped = meter.CreateCounter<long>(
             "docviewer.adapter.records_dropped", "{record}", "Source records skipped because they could not be mapped.");
+
+        _refreshJobs = meter.CreateCounter<long>(
+            "docviewer.refresh.jobs", "{job}", "Background refresh of partial results: enqueued, dropped, retried, completed, gave_up.");
 
         meter.CreateObservableGauge(
             "docviewer.circuit.state",
@@ -64,6 +68,8 @@ public sealed class DocViewerMetrics
 
     public void RecordDropped(SourceSystem source, string reason) =>
         _recordsDropped.Add(1, Tag("source", source), new("reason", reason));
+
+    public void RefreshJob(string outcome) => _refreshJobs.Add(1, new KeyValuePair<string, object?>("outcome", outcome));
 
     private static KeyValuePair<string, object?> Tag(string name, SourceSystem source) => new(name, Wire(source));
 

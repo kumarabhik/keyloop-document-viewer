@@ -36,6 +36,11 @@ public sealed class DocumentEndpointTests : IDisposable
         return (response, body);
     }
 
+    private string CacheDiagnostics() => string.Join(
+        " | ",
+        _factory.Logs.Events.Select(e => e.RenderMessage(System.Globalization.CultureInfo.InvariantCulture))
+            .Where(m => m.Contains("cache", StringComparison.Ordinal) || m.Contains("search.completed", StringComparison.Ordinal)));
+
     private static string DocumentsPath(string vin = Payloads.Vin, string query = "") => $"/api/v1/vehicles/{vin}/documents{query}";
 
     [Theory]
@@ -107,7 +112,9 @@ public sealed class DocumentEndpointTests : IDisposable
         await GetAsync(DocumentsPath());
         var (response, body) = await GetAsync(DocumentsPath());
 
-        response.Headers.GetValues("X-Cache").Single().ShouldBe("HIT");
+        // Failed once on CI and never locally (E-023); if it recurs, the API's own log says whether the first result
+        // was partial or the cache write ran out of its budget.
+        response.Headers.GetValues("X-Cache").Single().ShouldBe("HIT", CacheDiagnostics());
         body["cache"]!.GetValue<string>().ShouldBe("HIT");
         _factory.Sales.LogEntries.Count.ShouldBe(1);
     }

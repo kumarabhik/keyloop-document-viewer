@@ -290,6 +290,8 @@ SERVICE stale      5 timeout 2026-10-27T20:31:29.929446+00:00
 
 In plain words: Sales answered normally. Service timed out, so the API served Service's last good copy from the database and labelled it `stale` with the time it was taken. The user still sees all nine documents, plus a warning. In step 2 the API returns **503** with `Retry-After: 5`, because neither system answered and there was no earlier copy of vehicle 10 to fall back on.
 
+A partial answer is not the end: the API tries that vehicle again in the background after 5, 15 and 45 seconds (D-033). Once both systems answer, the complete result goes into the cache, so the next person who searches gets everything at once (`X-Cache: HIT`) without waiting for the slow system. Settings: `Refresh__Enabled`, `Refresh__FirstDelaySeconds`, `Refresh__MaxAttempts`.
+
 After three or more calls in ten seconds with at least half failing, a source's circuit breaker opens (`circuit_open`, D-027): the API stops calling it for 30 s and answers immediately instead of waiting 2 s each time (D-014). With Redis configured (as in compose), the breaker's state is shared: failures seen by any API replica count together, and every replica stops calling the source (D-032).
 
 To see the shared breaker with two API replicas (PowerShell, stack running):
@@ -366,7 +368,7 @@ In plain words: with 50 users, 95 % of cache hits answer within 5.5 ms and 95 % 
 | Signal | Where | Notes |
 |---|---|---|
 | Logs | stdout, compact JSON (Serilog) | Every event carries `@tr` (trace id). VINs appear only masked: `MA3**********0001` (D-011). Successful probes and scrapes are not logged. The UI's nginx logs paths without query strings, so deep-link VINs never reach its log (E-017) |
-| Metrics | <http://localhost:8080/metrics> (Prometheus) | `docviewer_source_requests_total`, `docviewer_source_duration_seconds`, `docviewer_cache_requests_total`, `docviewer_partial_responses_total`, `docviewer_stale_served_total`, `docviewer_circuit_state`; no VIN labels. Grafana dashboard provisioned at <http://localhost:3000> |
+| Metrics | <http://localhost:8080/metrics> (Prometheus) | `docviewer_source_requests_total`, `docviewer_source_duration_seconds`, `docviewer_cache_requests_total`, `docviewer_refresh_jobs_total`, `docviewer_partial_responses_total`, `docviewer_stale_served_total`, `docviewer_circuit_state`; no VIN labels. Grafana dashboard provisioned at <http://localhost:3000> |
 | Traces | Jaeger <http://localhost:16686> (obs profile) | One trace per search with the two source calls as parallel child spans; see [docs/diagrams/trace-example.md](docs/diagrams/trace-example.md) |
 | Health | `/healthz` (process up), `/readyz` (`Healthy` / `Degraded`) | Docker healthcheck runs `dotnet DocViewer.Api.dll --healthcheck` inside the chiselled image (D-023) |
 

@@ -2,6 +2,7 @@ using DocViewer.Application.Documents;
 using DocViewer.Application.Observability;
 using DocViewer.Application.Options;
 using DocViewer.Application.Persistence;
+using DocViewer.Application.Refresh;
 using DocViewer.Application.Sources;
 using DocViewer.Application.Tests.Observability;
 using DocViewer.Application.Time;
@@ -24,7 +25,11 @@ public sealed class AggregationServiceTests : IDisposable
     private readonly SourceActivity _activity = new();
     private readonly TestMetrics _metrics = new();
 
-    public void Dispose() => _metrics.Dispose();
+    public void Dispose()
+    {
+        _refreshScheduler?.Dispose();
+        _metrics.Dispose();
+    }
 
     private AggregationService CreateService(params ISourceAdapter[] adapters)
     {
@@ -40,6 +45,7 @@ public sealed class AggregationServiceTests : IDisposable
             _cache,
             _snapshots,
             _audit,
+            RefreshScheduler,
             _activity,
             _metrics.Metrics,
             new DealershipCalendar(_time, rules),
@@ -48,6 +54,12 @@ public sealed class AggregationServiceTests : IDisposable
             _time,
             NullLogger<AggregationService>.Instance);
     }
+
+    private RefreshScheduler? _refreshScheduler;
+
+    /// <summary>The service's real queue; nothing reads it here, so queued jobs never run unless a test runs them.</summary>
+    private RefreshScheduler RefreshScheduler => _refreshScheduler ??= new RefreshScheduler(
+        MsOptions.Create(new RefreshOptions()), _time, _metrics.Metrics, NullLogger<RefreshScheduler>.Instance);
 
     private static SearchRequest Request(bool refresh = false) => new(TestVin, refresh, "trace-1");
 

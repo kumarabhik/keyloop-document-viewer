@@ -236,7 +236,14 @@ The project's memory. If it matters later, it goes here. Every agent and every h
 - **Alternatives:** share only "open" (Kumar's pick was the fuller one); Polly's breaker plus a manual-control sync loop (two sources of truth); per-call `INCR` keys per bucket (several keys per call, not cluster-friendly).
 - **Consequences:** Up to three Redis round trips per source call (~1 ms each in Docker), all inside the 2 s source budget, so invariant 5 is unchanged. Replicas' clocks must roughly agree (buckets are epoch-based). A Redis outage makes the breaker per process again, never fails a call (invariant 10). Verified in Docker with two API containers: 3 failing searches on one ⇒ the other, which made no search, reports `open` and short-circuits.
 
-<!-- Add new decisions above this line, continuing from D-033. -->
+### D-033: Background refresh of partial results through an in-process queue
+- **Date:** 2026-10-31 · **Status:** Accepted (Kumar chose the in-process `Channel` over Redis Streams)
+- **Context:** Partial results are never cached (D-006), so after an outage every user pays for the fan-out again, and stale snapshots age while nobody searches.
+- **Decision:** A partial fan-out queues its VIN in `RefreshScheduler` (Application; `System.Threading.Channels`, de-duplicated per VIN, 1 000 VINs max, released after 5 s, then 15 s, 45 s). `BackgroundRefresher` (2 at a time, hosted by the Api's `RefreshWorker`) calls `AggregationService.RefreshAsync`: the same single-flight fan-out, no cache read, no audit row. A complete result is cached and snapshotted by the normal path; still partial after 3 attempts ⇒ give up. `docviewer.refresh.jobs{outcome}`. Partial/stale counters moved from the fan-out to the response, so a refresh is not counted as a response. Options `Refresh:*`, validated on start.
+- **Alternatives:** Redis Streams (durable, shared; more code, and needs Redis to work); refreshing only the failed source and merging it with the other's snapshot (would label snapshot data as live).
+- **Consequences:** No new package. Jobs are per replica and lost on restart (the next partial search queues the VIN again). The healthy source is called up to 3 more times per partial VIN. API contract tests push the delay to 600 s so their request counts hold; `BackgroundRefreshApiTests` runs the real worker. Verified in Docker: Service hanging ⇒ partial (`stale`); healed; 8 s later, with no search in between, the next search was a complete `HIT`.
+
+<!-- Add new decisions above this line, continuing from D-034. -->
 
 ---
 
@@ -406,7 +413,14 @@ Record anything that cost more than ~15 minutes, would bite someone again, or ch
 - **Fix:** `WarmUpSharedCircuitStateAsync` at start-up (best effort, 5 s cap, logs `startup.shared_circuit_warmup_failed`). Re-measured: 3 failures in Redis, second replica `open` and short-circuiting, no fallback warnings.
 - **Prevention:** The two-container check is in the README's verification notes for D-032. Rule (again): a budget that is tight enough to matter must be checked on the real stack, cold.
 
-<!-- Add new errors above this line, continuing from E-023. -->
+### E-023: `SecondCall_IsServedFromCache` failed once on CI (MISS instead of HIT), passed on re-run
+- **Date:** 2026-10-31 · **Task:** shared breaker commit `6ed058a` · **Severity:** low (not reproduced)
+- **Symptom:** CI's test job failed on that one assertion; re-running the failed job passed. Locally: 10/10 on a clean worktree of the commit and 70/70 project runs with two full suites running at once.
+- **Root cause:** Unproven. Most likely the E-019 cache budget: on a busy runner the first cache write in a new test host (JIT of the serializer and cache path) took over 150 ms, so the second request arrived before the abandoned write finished. Nothing in D-032 touches the cache path.
+- **Fix:** None to the product or the budget without evidence. The assertion now prints the API's own cache and search log lines, so a recurrence names its cause.
+- **Prevention:** Agent's own mistakes on the way, logged honestly: two local "reproduction" runs used stale binaries because the build had failed (untracked files from the next task; then a diagnostic edit that did not compile) — the E-002 trap. Runs are now chained on `Build succeeded`.
+
+<!-- Add new errors above this line, continuing from E-024. -->
 
 ---
 

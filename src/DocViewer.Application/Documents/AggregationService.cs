@@ -3,6 +3,7 @@ using System.Diagnostics;
 using DocViewer.Application.Observability;
 using DocViewer.Application.Options;
 using DocViewer.Application.Persistence;
+using DocViewer.Application.Refresh;
 using DocViewer.Application.Sources;
 using DocViewer.Application.Time;
 using DocViewer.Domain;
@@ -21,6 +22,7 @@ public sealed partial class AggregationService(
     IDocumentCache cache,
     ISnapshotRepository snapshots,
     ISearchAuditWriter audit,
+    RefreshScheduler refreshScheduler,
     SourceActivity activity,
     DocViewerMetrics metrics,
     DealershipCalendar calendar,
@@ -66,6 +68,19 @@ public sealed partial class AggregationService(
         }
 
         return Finish(request, new SearchResult(documents, cacheStatus), started, span);
+    }
+
+    /// <summary>
+    /// A fan-out for the background refresher (D-033): no cache read and no audit row, because no user is waiting.
+    /// A complete result is cached and snapshotted as after any search. Returns whether the result was complete.
+    /// </summary>
+    public async Task<bool> RefreshAsync(Vin vin, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(vin);
+        using var span = DocViewerTracing.Source.StartActivity("refresh");
+        var documents = await FanOutOnceAsync(vin).WaitAsync(cancellationToken);
+        span?.SetTag("docviewer.partial", documents.Partial);
+        return !documents.Partial;
     }
 
     /// <summary>Audits a search rejected before any downstream call (invalid VIN).</summary>
@@ -120,16 +135,12 @@ public sealed partial class AggregationService(
             GeneratedAt = timeProvider.GetUtcNow(),
         };
 
-        foreach (var failed in aggregated.Sources.Where(r => !r.IsOk))
+        if (aggregated.Partial)
         {
-            metrics.PartialResponse(failed.Source);
-            if (failed.Status == SourceStatus.Stale)
-            {
-                metrics.StaleServed(failed.Source);
-            }
+            // D-033: try again in the background; a no-op while this VIN is already queued (e.g. this is that retry).
+            refreshScheduler.TryEnqueue(vin);
         }
-
-        if (!aggregated.Partial)
+        else
         {
             // D-006. Budgeted (E-019): a stuck write would otherwise hold this shared fan-out and every waiting caller.
             await WithinBudgetAsync(() => SetCacheAsync(aggregated), "cache.set", vin);
@@ -232,6 +243,16 @@ public sealed partial class AggregationService(
 
         var latency = timeProvider.GetElapsedTime(started);
         var documents = result.Documents;
+        // Per response, as the instruments describe; counted here so background refresh fan-outs are not responses.
+        foreach (var failed in documents.Sources.Where(r => !r.IsOk))
+        {
+            metrics.PartialResponse(failed.Source);
+            if (failed.Status == SourceStatus.Stale)
+            {
+                metrics.StaleServed(failed.Source);
+            }
+        }
+
         LogSearchCompleted(logger, request.Vin.Masked, result.Outcome, result.Cache, documents.Documents.Count, latency.TotalMilliseconds);
 
         var entry = new SearchAuditEntry(

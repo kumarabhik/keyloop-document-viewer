@@ -238,7 +238,7 @@ sequenceDiagram
 5. **Normalise** — Each adapter maps its payload to canonical `Document`s. Malformed records are skipped, counted (`adapter_records_dropped_total`) and logged with the record id — never fatal.
 6. **Fallback** — For any failed source, read its last-known-good snapshot (≤ 24 h) from Postgres, giving up after 300 ms (E-018). If found in time, include those documents and mark the source `stale` with `asOf`; otherwise the original failure stands.
 7. **Merge & enrich** — Concatenate, compute `status` (VALID / EXPIRING_SOON / EXPIRED / NOT_APPLICABLE) against today in the dealership time zone (stale documents included), detect duplicates and conflicts across sources, and sort by `DocumentPosition` (D-012).
-8. **Cache & persist** — If every source answered live, write the cache (150 ms budget; a slow write finishes on its own). In the background, upsert the snapshot of **each** source that answered, even when the other failed, and write one audit row; a database outage never fails or delays the search.
+8. **Cache & persist** — If every source answered live, write the cache (150 ms budget; a slow write finishes on its own). In the background, upsert the snapshot of **each** source that answered, even when the other failed, and write one audit row; a database outage never fails or delays the search. If the result is **partial**, queue the VIN for a **background refresh** (D-033): after 5 s (then 15 s, 45 s) a worker runs the fan-out again with no user waiting; once it is complete it is cached and snapshotted like any search, so the next user gets a complete `HIT`. The refresh writes no audit row and is not counted as a response.
 9. **Respond** — Apply filters, then the optional page (`limit`/`cursor`, D-031); `summary` counts the whole filtered result. Include `partial` and per-source status/latency/count.
 
 At start-up the API creates or migrates the schema and runs one snapshot lookup, so the first real fallback does not pay for a cold query (E-020).
@@ -567,6 +567,7 @@ Custom instruments live on one `Meter("DocViewer")` in a `DocViewerMetrics` clas
 | `docviewer_partial_responses_total` | counter | `failed_source` | User-visible degradation |
 | `docviewer_stale_served_total` | counter | `source` | How often the fallback is used |
 | `docviewer_adapter_records_dropped_total` | counter | `source, reason` | Data quality of sources |
+| `docviewer_refresh_jobs_total` | counter | `outcome` (`enqueued`, `dropped`, `retried`, `completed`, `gave_up`) | Is the background refresh (D-033) keeping up, and do sources recover? |
 
 ### 12.3 Tracing — OpenTelemetry
 
@@ -708,6 +709,7 @@ Compose runs the services in a `Demo` environment with local defaults, so a clea
 | Risk / trade-off | Mitigation / note |
 |---|---|
 | Shared breaker state adds up to three Redis calls per source call | ~1 ms each; 50 ms budget each, and a failing Redis is skipped for 10 s, so the breaker degrades to per process (D-032) |
+| Background refresh (D-033) calls the healthy source again for every partial VIN, up to 3 times | At most 2 refreshes run at once and 1 000 VINs wait; an open breaker answers the failed source at no cost. Jobs are in memory per replica: a restart drops them and the next partial search queues the VIN again |
 | Duplicate detection is heuristic and may produce false positives | Flag-only, never hides data; key rules are unit-tested and easy to tune |
 | Stale fallback can show outdated data | Labelled with `asOf`; capped at 24 h |
 | Two mocks are under our control, so they may be friendlier than real systems | Fault modes include malformed payloads and flakiness |
@@ -716,7 +718,7 @@ Compose runs the services in a `Demo` environment with local defaults, so a clea
 | With Redis down there is no shared cache, so a popular VIN fans out about once per request per replica (R8) | Each fan-out is bounded by the breaker and D-005; a local in-memory fallback cache would cap it |
 | Raw VINs at rest in the cache key and snapshot table (R3) | Needed for lookups; hashing them would need a keyed lookup scheme |
 
-**Future work:** document file preview via signed URLs; OIDC auth and dealer scoping; async refresh via a message queue for slow sources (return cached, refresh in background); Helm chart; more sources (Parts, Finance, OEM recall feeds) as new adapters.
+**Future work:** document file preview via signed URLs; OIDC auth and dealer scoping; Helm chart; a durable broker (Redis Streams, a cloud queue) behind the refresh scheduler if refresh jobs must survive restarts or be shared across replicas; more sources (Parts, Finance, OEM recall feeds) as new adapters.
 
 ## 19. How GenAI Was Used in the Design Phase
 
