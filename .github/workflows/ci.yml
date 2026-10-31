@@ -75,6 +75,36 @@ jobs:
       - name: Build API, mock and UI images
         run: docker compose build api sales-mock service-mock web
 
+  # D-035: the Helm chart renders, passes Kubernetes schema validation, and refuses unsafe values. Helm is on the runner.
+  helm:
+    name: Helm chart (lint, schema, guard rails)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint
+        run: helm lint deploy/helm/docviewer --strict
+      - name: Render default and production-like values, validate against Kubernetes 1.33 schemas
+        run: |
+          helm template demo deploy/helm/docviewer > default.yaml
+          helm template demo deploy/helm/docviewer \
+            --set api.environment=Production --set api.vinHashSalt=ci-only-not-a-demo-salt \
+            --set mocks.enabled=false --set sources.salesUrl=http://sales --set sources.serviceUrl=http://service \
+            --set postgres.enabled=false --set externalDatabase.existingSecret=docviewer-db \
+            --set redis.enabled=false --set externalRedis.connectionString=redis:6379 \
+            --set api.auth.enabled=true --set api.auth.authority=https://idp.example --set api.auth.audience=docviewer-api \
+            --set ingress.enabled=true > production.yaml
+          docker run --rm -v "$PWD:/work" ghcr.io/yannh/kubeconform:v0.6.7 \
+            -strict -summary -kubernetes-version 1.33.0 /work/default.yaml /work/production.yaml
+      - name: Unsafe values are refused
+        # Not "! helm ...": bash -e ignores the status of a negated command, so that line could never fail the step.
+        run: |
+          for unsafe in api.environment=Production mocks.enabled=false api.auth.enabled=true; do
+            if helm template x deploy/helm/docviewer --set "$unsafe" > /dev/null 2>&1; then
+              echo "::error::the chart rendered with unsafe value $unsafe"; exit 1
+            fi
+          done
+
   # D-026: generated requests against the real API, checked against the committed contract (docs/openapi.json).
   # negative_data_rejection is excluded on purpose: the API accepts more spellings than it advertises (D-021).
   contract-fuzz:

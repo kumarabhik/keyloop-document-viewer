@@ -1,0 +1,64 @@
+{{- if .Values.postgres.enabled }}
+{{- $ctx := dict "root" . "component" "postgres" -}}
+{{- $pg := .Values.postgres -}}
+# Demo database (D-003). One replica, no backups: use a managed PostgreSQL beyond a demo (postgres.enabled=false).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "docviewer.name" $ctx }}
+  labels: {{- include "docviewer.labels" $ctx | nindent 4 }}
+spec:
+  serviceName: {{ include "docviewer.name" $ctx }}
+  replicas: 1
+  selector:
+    matchLabels: {{- include "docviewer.selector" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "docviewer.labels" $ctx | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 70 # the postgres user of the alpine image, so it owns the volume
+      containers:
+        - name: postgres
+          image: {{ include "docviewer.image" (dict "root" . "image" $pg.image) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - { name: postgres, containerPort: 5432 }
+          env:
+            - { name: POSTGRES_DB, value: {{ $pg.database | quote }} }
+            - { name: POSTGRES_USER, value: {{ $pg.username | quote }} }
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: {{ include "docviewer.secretName" . }}, key: POSTGRES_PASSWORD }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ $pg.username | quote }}, "-d", {{ $pg.database | quote }}]
+            periodSeconds: 5
+          resources: {{- toYaml $pg.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with $pg.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests: { storage: {{ $pg.storage }} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "docviewer.name" $ctx }}
+  labels: {{- include "docviewer.labels" $ctx | nindent 4 }}
+spec:
+  selector: {{- include "docviewer.selector" $ctx | nindent 4 }}
+  ports:
+    - { name: postgres, port: 5432, targetPort: postgres }
+{{- end }}

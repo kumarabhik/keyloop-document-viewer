@@ -1,0 +1,48 @@
+{{- if .Values.mocks.enabled }}
+{{- range $name, $mock := dict "sales-mock" .Values.mocks.sales "service-mock" .Values.mocks.service }}
+{{- $ctx := dict "root" $ "component" $name }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "docviewer.name" $ctx }}
+  labels: {{- include "docviewer.labels" $ctx | nindent 4 }}
+spec:
+  replicas: 1 # fault-injection state lives in the process, so one replica keeps the demo toggles predictable
+  selector:
+    matchLabels: {{- include "docviewer.selector" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "docviewer.labels" $ctx | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {{- include "docviewer.dotnetPodSecurity" $ | nindent 8 }}
+      containers:
+        - name: {{ $name }}
+          image: {{ include "docviewer.image" (dict "root" $ "image" $mock.image) }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          ports:
+            - { name: http, containerPort: 8080 }
+          env:
+            - { name: ASPNETCORE_ENVIRONMENT, value: {{ $.Values.api.environment | quote }} }
+          readinessProbe:
+            tcpSocket: { port: http }
+            periodSeconds: 5
+          resources: {{- toYaml $.Values.mocks.resources | nindent 12 }}
+          securityContext: {{- include "docviewer.dotnetContainerSecurity" $ | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "docviewer.name" $ctx }}
+  labels: {{- include "docviewer.labels" $ctx | nindent 4 }}
+spec:
+  selector: {{- include "docviewer.selector" $ctx | nindent 4 }}
+  ports:
+    - { name: http, port: 8080, targetPort: http }
+{{- end }}
+{{- end }}

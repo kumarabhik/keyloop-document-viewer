@@ -1,0 +1,68 @@
+{{- if .Values.web.enabled }}
+{{- $ctx := dict "root" . "component" "web" -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "docviewer.name" $ctx }}
+  labels: {{- include "docviewer.labels" $ctx | nindent 4 }}
+data:
+  # Read by the browser at start-up (nginx serves it with no-cache), so the API address is set here, not in the image.
+  appsettings.json: |
+    {
+      "Api": {
+        "BaseUrl": {{ .Values.web.apiBaseUrl | quote }},
+        "UseMocks": false,
+        "SalesMockUrl": {{ .Values.web.salesMockUrl | quote }},
+        "ServiceMockUrl": {{ .Values.web.serviceMockUrl | quote }},
+        "DealershipTimeZone": "Asia/Kolkata"
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "docviewer.name" $ctx }}
+  labels: {{- include "docviewer.labels" $ctx | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {{- include "docviewer.selector" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "docviewer.labels" $ctx | nindent 8 }}
+      annotations:
+        checksum/config: {{ .Values.web | toJson | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        # nginx:alpine starts as root to bind :80 and then serves as the nginx user; static files only.
+        - name: web
+          image: {{ include "docviewer.image" (dict "root" . "image" .Values.web.image) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - { name: http, containerPort: 80 }
+          readinessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 5
+          resources: {{- toYaml .Values.web.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: config
+              mountPath: /usr/share/nginx/html/appsettings.json
+              subPath: appsettings.json
+      volumes:
+        - name: config
+          configMap: { name: {{ include "docviewer.name" $ctx }} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "docviewer.name" $ctx }}
+  labels: {{- include "docviewer.labels" $ctx | nindent 4 }}
+spec:
+  type: {{ .Values.web.service.type }}
+  selector: {{- include "docviewer.selector" $ctx | nindent 4 }}
+  ports:
+    - { name: http, port: {{ .Values.web.service.port }}, targetPort: http }
+{{- end }}

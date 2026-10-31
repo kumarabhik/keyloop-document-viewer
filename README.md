@@ -118,6 +118,29 @@ dotnet run --project aspire/DocViewer.AppHost      # Docker must be running: Pos
 
 The console prints a dashboard link (`http://localhost:15201/login?t=…`). The dashboard lists every resource (Postgres, Redis, both mocks, the API, the UI) with its state and console logs; the API also sends its traces and metrics there. Everything else (URLs, demo VINs, fault switches) works as with Docker Compose. Notes: the first start pulls `postgres:16-alpine` and `redis:7-alpine`; Aspire's tooling may ask to trust the .NET HTTPS development certificate; structured logs stay in the console view because the API logs through Serilog to stdout. `tests/DocViewer.AppHost.Tests` starts the whole system this way and makes a real search (needs Docker).
 
+### 4.2 Kubernetes with Helm (optional)
+
+The chart in [deploy/helm/docviewer](deploy/helm/docviewer) installs the API (2 replicas), both mock systems, the UI, Postgres and Redis (D-035). Tested on minikube; any cluster works.
+
+```powershell
+docker compose build                                                    # builds docviewer-api, -sales-mock, -service-mock, -web
+foreach ($i in 'api','sales-mock','service-mock','web') { docker save "docviewer-${i}:latest" | docker exec -i minikube docker load }
+helm install demo deploy/helm/docviewer --namespace docviewer --create-namespace --wait
+kubectl port-forward -n docviewer svc/demo-docviewer-api 8080:8080     # then search as in section 5
+```
+
+(`minikube image load` failed on Windows with `GUEST_IMAGE_LOAD … parsing docker arch`; streaming the image into the node works. On a real cluster push the images and set `image.registry`.)
+
+For anything beyond a demo, set these values (the chart refuses to render the unsafe ones):
+
+| Value | Why |
+|---|---|
+| `api.environment=Production` with `api.vinHashSalt` (or `api.existingSaltSecret`) | A real salt; the published demo salt is refused (D-029) |
+| `mocks.enabled=false`, `sources.salesUrl`, `sources.serviceUrl` | The real Sales and Service systems |
+| `postgres.enabled=false`, `externalDatabase.existingSecret` (key `DOCVIEWER_DB`) | A managed database; the in-chart one has one replica and no backups |
+| `redis.enabled=false`, `externalRedis.connectionString` | A managed Redis for the shared cache and breaker |
+| `api.auth.*` | Sign-in and dealer scoping (section 5.6) |
+
 ## 5. Try the API
 
 ### 5.1 Seed vehicles

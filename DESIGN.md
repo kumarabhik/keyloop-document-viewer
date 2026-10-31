@@ -1,7 +1,7 @@
 # Unified Document Viewer — System Design Document
 
 > Keyloop Technical Assessment · **Scenario D (Domain: Operate)**
-> Author: Kumar Abhik · Version 1.1 · Last updated: 2026-10-30
+> Author: Kumar Abhik · Version 1.2 · Last updated: 2026-10-31
 >
 > Companion docs: [ROADMAP.md](ROADMAP.md) (progress) · [SYSTEMS.md](SYSTEMS.md) (decisions & errors log) · [AGENTS.md](AGENTS.md) (rules for AI agents)
 
@@ -624,7 +624,7 @@ Grafana dashboard JSON is committed under `infra/grafana/`.
 | Tests | **xUnit**, **Shouldly**, **NSubstitute**, **WireMock.Net**, **`WebApplicationFactory`**, **coverlet** | Real HTTP fakes for timeouts/500s/malformed bodies; in-memory hosting of the full API | FluentAssertions — v8 moved to a commercial licence (D-016) |
 | Quality | **Nullable reference types**, `TreatWarningsAsErrors`, .NET analyzers (`AnalysisLevel latest-recommended`), `dotnet format`, **Central Package Management** | Catches AI-introduced nullability and API-misuse errors at compile time | StyleCop (noisier) |
 | Frontend (demo) | **Blazor WebAssembly** (.NET 10), typed `HttpClient`, in-process mock handler, **bUnit**; served by nginx in Docker | One language for the whole repo, no Node.js; shares the Domain VIN rules; mock mode runs the UI without the backend (D-025) | React + Vite + MSW (the original plan; a second language and toolchain for a demo client) |
-| Packaging | **Docker Compose** (chiselled .NET runtime images) | One command starts API, mocks, Postgres, Redis (+ optional observability) | .NET Aspire AppHost (Day 5 stretch); Kubernetes |
+| Packaging | **Docker Compose** (chiselled .NET runtime images) | One command starts API, mocks, Postgres, Redis (+ optional observability) | Also provided: .NET Aspire AppHost (D-030) and a Helm chart for Kubernetes (D-035) |
 | CI | **GitHub Actions** | Build (warnings as errors), format check, tests + coverage, OpenAPI drift check | – |
 
 ## 15. Building for the Future
@@ -689,6 +689,7 @@ keyloop/
 ├── scripts/coverage.ps1            # tests + coverage report + 85 % gate
 ├── infra/{prometheus,grafana,k6}/
 ├── docs/{openapi.json, diagrams/}
+├── deploy/helm/docviewer/          # Helm chart for Kubernetes (D-035)
 ├── docker-compose.yml
 └── .github/workflows/ci.yml
 ```
@@ -698,6 +699,7 @@ keyloop/
 | `docker compose up --build` | API :8080, Sales mock :8081, Service mock :8082, Postgres :5432, Redis :6379, UI :5173 (nginx) |
 | `docker compose --profile obs up` | + Prometheus :9090, Grafana :3000, Jaeger :16686 |
 | `dotnet run --project aspire/DocViewer.AppHost` | The same services through .NET Aspire, plus its dashboard (D-030) |
+| `helm install demo deploy/helm/docviewer` | The same services on Kubernetes: API ×2 with PDB and probes, mocks, UI, optional Postgres/Redis (D-035) |
 | `dotnet build` | Builds everything (warnings are errors) and regenerates `docs/openapi.json` |
 | `dotnet test` | All test projects |
 | `dotnet format --verify-no-changes` | Style check (CI) |
@@ -713,6 +715,7 @@ Compose runs the services in a `Demo` environment with local defaults, so a clea
 |---|---|
 | Shared breaker state adds up to three Redis calls per source call | ~1 ms each; 50 ms budget each, and a failing Redis is skipped for 10 s, so the breaker degrades to per process (D-032) |
 | Background refresh (D-033) calls the healthy source again for every partial VIN, up to 3 times | At most 2 refreshes run at once and 1 000 VINs wait; an open breaker answers the failed source at no cost. Jobs are in memory per replica: a restart drops them and the next partial search queues the VIN again |
+| Start-up work (schema, warm-ups) ran once; on Kubernetes the dependencies start in any order (E-024, E-026) | Retried in the background until it succeeds; readiness still only checks that the database answers |
 | Duplicate detection is heuristic and may produce false positives | Flag-only, never hides data; key rules are unit-tested and easy to tune |
 | Stale fallback can show outdated data | Labelled with `asOf`; capped at 24 h |
 | Two mocks are under our control, so they may be friendlier than real systems | Fault modes include malformed payloads and flakiness |
@@ -721,7 +724,7 @@ Compose runs the services in a `Demo` environment with local defaults, so a clea
 | With Redis down there is no shared cache, so a popular VIN fans out about once per request per replica (R8) | Each fan-out is bounded by the breaker and D-005; a local in-memory fallback cache would cap it |
 | Raw VINs at rest in the cache key and snapshot table (R3) | Needed for lookups; hashing them would need a keyed lookup scheme |
 
-**Future work:** document file preview via signed URLs; Helm chart; a sign-in flow in the demo UI and the dealer in the audit row (D-034); a durable broker (Redis Streams, a cloud queue) behind the refresh scheduler if refresh jobs must survive restarts or be shared across replicas; more sources (Parts, Finance, OEM recall feeds) as new adapters.
+**Future work:** document file preview via signed URLs; a published image registry and an HPA for the chart; a sign-in flow in the demo UI and the dealer in the audit row (D-034); a durable broker (Redis Streams, a cloud queue) behind the refresh scheduler if refresh jobs must survive restarts or be shared across replicas; more sources (Parts, Finance, OEM recall feeds) as new adapters.
 
 ## 19. How GenAI Was Used in the Design Phase
 

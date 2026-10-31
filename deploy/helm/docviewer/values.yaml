@@ -1,0 +1,93 @@
+# Unified Document Viewer - Helm values (D-035).
+# Defaults give a self-contained demo: API (2 replicas), both mock source systems, the UI, Postgres and Redis.
+# For anything beyond a demo: environment=Production, a real vinHashSalt, external Postgres/Redis, mocks off.
+
+# Images are built by `docker compose build` (names docviewer-<service>); load them into the cluster or push them.
+image:
+  registry: ""            # e.g. ghcr.io/acme; empty = local image names
+  pullPolicy: IfNotPresent
+
+api:
+  image: { repository: docviewer-api, tag: latest }
+  replicaCount: 2         # >1 shows the shared breaker (D-032) and needs Redis for a shared cache
+  # Demo: no developer exception page and the published demo salt allowed. Production refuses demo salts (D-029).
+  environment: Demo
+  # Salted SHA-256 for VINs in the audit table (D-011). Required; in Production it must not be a published demo salt.
+  vinHashSalt: local-demo-salt-change-me
+  # Use an existing Secret with key VIN_HASH_SALT instead of vinHashSalt.
+  existingSaltSecret: ""
+  rateLimitPerMinute: 60  # per client IP (D-028); behind an ingress all clients share its IP until forwarded headers are set
+  corsOrigins: ["http://localhost:5173"]
+  # OIDC bearer auth with dealer scoping (D-034); off by default.
+  auth:
+    enabled: false
+    authority: ""         # e.g. https://login.example.com/realms/dealers
+    audience: ""          # e.g. docviewer-api
+    requireHttpsMetadata: true
+    dealerClaim: dealer_id
+  otlpEndpoint: ""        # e.g. http://jaeger-collector:4317; empty = no trace export
+  extraEnv: []            # more settings, e.g. [{ name: Refresh__FirstDelaySeconds, value: "10" }]
+  resources:
+    requests: { cpu: 100m, memory: 192Mi }
+    limits: { memory: 512Mi }
+  service: { type: ClusterIP, port: 8080 }
+  podDisruptionBudget: { minAvailable: 1 }  # rendered only when replicaCount > 1
+
+# Where the API finds the source systems when mocks.enabled is false.
+sources:
+  salesUrl: ""
+  serviceUrl: ""
+
+# Mock Sales and Service systems with seed data and fault injection (demo only).
+mocks:
+  enabled: true
+  sales: { image: { repository: docviewer-sales-mock, tag: latest } }
+  service: { image: { repository: docviewer-service-mock, tag: latest } }
+  resources:
+    requests: { cpu: 50m, memory: 96Mi }
+    limits: { memory: 256Mi }
+
+# Blazor WebAssembly demo client (D-025). The browser calls these URLs directly, so they must be reachable from it.
+web:
+  enabled: true
+  image: { repository: docviewer-web, tag: latest }
+  apiBaseUrl: http://localhost:8080
+  salesMockUrl: http://localhost:8081
+  serviceMockUrl: http://localhost:8082
+  service: { type: ClusterIP, port: 80 }
+  resources:
+    requests: { cpu: 10m, memory: 16Mi }
+    limits: { memory: 64Mi }
+
+# In-cluster PostgreSQL for the demo (snapshots + audit, D-003). Use a managed database in production:
+# set postgres.enabled=false and externalDatabase.connectionString (or existingSecret, key DOCVIEWER_DB).
+postgres:
+  enabled: true
+  image: { repository: postgres, tag: 16-alpine }
+  database: docviewer
+  username: docviewer
+  password: docviewer-local
+  storage: 1Gi
+  storageClass: ""        # empty = cluster default
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 512Mi }
+externalDatabase:
+  connectionString: ""
+  existingSecret: ""
+
+# In-cluster Redis for the shared cache and breaker state (D-015, D-032). No persistence: it is a cache.
+redis:
+  enabled: true
+  image: { repository: redis, tag: 7-alpine }
+  resources:
+    requests: { cpu: 25m, memory: 32Mi }
+    limits: { memory: 128Mi }
+externalRedis:
+  connectionString: ""    # e.g. my-redis:6379,password=...; empty with redis.enabled=false = in-memory cache, per-pod breaker
+
+ingress:
+  enabled: false
+  className: ""
+  host: docviewer.local   # serves the API only; the UI and mocks are reached by port-forward in the demo
+  tls: []

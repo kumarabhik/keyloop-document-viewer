@@ -1,0 +1,25 @@
+{{- if .Values.ingress.enabled }}
+{{- $ctx := dict "root" . "component" "api" -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "docviewer.name" $ctx }}
+  labels: {{- include "docviewer.labels" $ctx | nindent 4 }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "docviewer.name" $ctx }}
+                port: { name: http }
+{{- end }}

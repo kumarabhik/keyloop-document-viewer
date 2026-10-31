@@ -1,0 +1,112 @@
+{{- $ctx := dict "root" . "component" "api" -}}
+{{- $secret := include "docviewer.secretName" . -}}
+{{- $api := .Values.api -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "docviewer.name" $ctx }}
+  labels: {{- include "docviewer.labels" $ctx | nindent 4 }}
+spec:
+  replicas: {{ $api.replicaCount }}
+  selector:
+    matchLabels: {{- include "docviewer.selector" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "docviewer.labels" $ctx | nindent 8 }}
+      annotations:
+        checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {{- include "docviewer.dotnetPodSecurity" . | nindent 8 }}
+      containers:
+        - name: api
+          image: {{ include "docviewer.image" (dict "root" . "image" $api.image) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - { name: http, containerPort: 8080 }
+          env:
+            - { name: ASPNETCORE_ENVIRONMENT, value: {{ $api.environment | quote }} }
+            - name: Persistence__VinHashSalt
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $api.existingSaltSecret | default $secret }}
+                  key: VIN_HASH_SALT
+            {{- if or .Values.postgres.enabled .Values.externalDatabase.connectionString .Values.externalDatabase.existingSecret }}
+            - { name: Persistence__Provider, value: Postgres }
+            - name: ConnectionStrings__DocViewer
+              valueFrom:
+                secretKeyRef:
+                  name: {{ if and (not .Values.postgres.enabled) .Values.externalDatabase.existingSecret }}{{ .Values.externalDatabase.existingSecret }}{{ else }}{{ $secret }}{{ end }}
+                  key: DOCVIEWER_DB
+            {{- else }}
+            # No database configured: SQLite in the pod's /tmp, so snapshots live and die with the pod (D-019).
+            - { name: Persistence__Provider, value: Sqlite }
+            - { name: ConnectionStrings__DocViewer, value: "Data Source=/tmp/docviewer.db" }
+            {{- end }}
+            - name: ConnectionStrings__Redis
+              valueFrom:
+                secretKeyRef: { name: {{ $secret }}, key: REDIS }
+            - name: Sources__Sales__BaseUrl
+              value: {{ if .Values.mocks.enabled }}{{ printf "http://%s:8080" (include "docviewer.name" (dict "root" . "component" "sales-mock")) | quote }}{{ else }}{{ .Values.sources.salesUrl | quote }}{{ end }}
+            - name: Sources__Service__BaseUrl
+              value: {{ if .Values.mocks.enabled }}{{ printf "http://%s:8080" (include "docviewer.name" (dict "root" . "component" "service-mock")) | quote }}{{ else }}{{ .Values.sources.serviceUrl | quote }}{{ end }}
+            {{- range $i, $origin := $api.corsOrigins }}
+            - { name: Cors__AllowedOrigins__{{ $i }}, value: {{ $origin | quote }} }
+            {{- end }}
+            - { name: RateLimit__PermitsPerMinute, value: {{ $api.rateLimitPerMinute | quote }} }
+            {{- if $api.auth.enabled }}
+            - { name: Auth__Enabled, value: "true" }
+            - { name: Auth__Authority, value: {{ $api.auth.authority | quote }} }
+            - { name: Auth__Audience, value: {{ $api.auth.audience | quote }} }
+            - { name: Auth__RequireHttpsMetadata, value: {{ $api.auth.requireHttpsMetadata | quote }} }
+            - { name: Auth__DealerClaim, value: {{ $api.auth.dealerClaim | quote }} }
+            {{- end }}
+            {{- if $api.otlpEndpoint }}
+            - { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: {{ $api.otlpEndpoint | quote }} }
+            - { name: OTEL_SERVICE_NAME, value: docviewer-api }
+            {{- end }}
+            {{- with $api.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          # The API starts without Postgres or Redis (invariant 10), so it needs no init containers. Readiness reports a
+          # database outage as Degraded = 200 (D-024): a database blip must not pull every pod out of the Service.
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources: {{- toYaml $api.resources | nindent 12 }}
+          securityContext: {{- include "docviewer.dotnetContainerSecurity" . | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "docviewer.name" $ctx }}
+  labels: {{- include "docviewer.labels" $ctx | nindent 4 }}
+spec:
+  type: {{ $api.service.type }}
+  selector: {{- include "docviewer.selector" $ctx | nindent 4 }}
+  ports:
+    - { name: http, port: {{ $api.service.port }}, targetPort: http }
+{{- if gt (int $api.replicaCount) 1 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "docviewer.name" $ctx }}
+  labels: {{- include "docviewer.labels" $ctx | nindent 4 }}
+spec:
+  minAvailable: {{ $api.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels: {{- include "docviewer.selector" $ctx | nindent 6 }}
+{{- end }}

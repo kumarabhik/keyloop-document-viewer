@@ -1,0 +1,8 @@
+apiVersion: v2
+name: docviewer
+description: Unified Document Viewer - one VIN search across the dealership's Sales and Service systems (Keyloop Scenario D).
+type: application
+version: 0.1.0
+appVersion: "1.1"
+keywords: [dotnet, aspnetcore, documents, dealership]
+home: https://github.com/kumarabhik/keyloop-document-viewer

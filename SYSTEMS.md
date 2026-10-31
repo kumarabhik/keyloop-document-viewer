@@ -250,7 +250,14 @@ The project's memory. If it matters later, it goes here. Every agent and every h
 - **Alternatives:** vehicle scope (Kumar picked document scope); on by default (needs an issuer for every demo and CI run); scope inside the adapters (would split the cache per dealer and hide duplicates the API should still know about).
 - **Consequences:** A document the source sends without a dealer code is invisible to every scoped caller, including old snapshots taken before this change (they refresh within a search). The demo UI does not sign in. Rate limits stay per IP. Verified by 16 API tests through the real JwtBearer handler with locally signed RS256 tokens (no network); not verified against a real identity provider.
 
-<!-- Add new decisions above this line, continuing from D-035. -->
+### D-035: Helm chart for Kubernetes, verified on minikube
+- **Date:** 2026-10-31 · **Status:** Accepted (backlog item; Kubernetes was listed as an alternative in DESIGN §14)
+- **Context:** Compose and Aspire run one machine; a cluster needs manifests, probes, secrets and replica settings.
+- **Decision:** `deploy/helm/docviewer` (chart 0.1.0, app 1.1), no chart dependencies. API Deployment (2 replicas, PDB, `/healthz` startup and liveness, `/readyz` readiness, non-root uid 1654, read-only root with `/tmp` emptyDir, all capabilities dropped), both mocks, the UI (its `appsettings.json` from a ConfigMap, so the browser's API URL is set at install time), and optional in-cluster Postgres (StatefulSet + PVC) and Redis (no persistence). Salt, Postgres password and connection strings in a Secret, or existing Secrets; the E-018/E-019 client timeouts are in the generated connection strings. Templates `fail` on what the API would refuse anyway: a demo salt in Production (D-029), auth without authority/audience (D-034), mocks off without source URLs. No database configured ⇒ SQLite in `/tmp`. CI job `helm`: `helm lint --strict`, kubeconform v0.6.7 against Kubernetes 1.33 schemas for a demo and a production-like render, and the guard rails.
+- **Alternatives:** Bitnami Postgres/Redis subcharts (a dependency and image source we do not control, more values than the demo needs); init containers waiting for Postgres/Redis (would make the API wait for its database, against invariant 10; fixed in the product instead, E-024, E-026); raw manifests or Kustomize (no templating for the optional parts).
+- **Consequences:** Verified on minikube 1.36 / Kubernetes 1.33: all pods ready; a search on one pod is a cache HIT on the other; snapshots and audit rows in Postgres; three failures through one pod open the circuit on the other; 0 raw VINs in every pod log. The cluster run found three product bugs (E-024, E-025, E-026). The UI and mocks are reached by port-forward; the optional Ingress serves the API only. Images are built by compose and loaded into the cluster (or pushed to `image.registry`).
+
+<!-- Add new decisions above this line, continuing from D-036. -->
 
 ---
 
@@ -427,7 +434,28 @@ Record anything that cost more than ~15 minutes, would bite someone again, or ch
 - **Fix:** None to the product or the budget without evidence. The assertion now prints the API's own cache and search log lines, so a recurrence names its cause.
 - **Prevention:** Agent's own mistakes on the way, logged honestly: two local "reproduction" runs used stale binaries because the build had failed (untracked files from the next task; then a diagnostic edit that did not compile) — the E-002 trap. Runs are now chained on `Build succeeded`.
 
-<!-- Add new errors above this line, continuing from E-024. -->
+### E-024: A database that started after the API was never set up: no snapshots or audit for the pod's lifetime
+- **Date:** 2026-10-31 · **Task:** Helm chart (D-035) · **Severity:** high
+- **Symptom:** On minikube both API pods logged `startup.database_init_failed`, then on every search `relation "source_snapshot" does not exist` and `persistence.audit_failed`, while `/readyz` said `Healthy`.
+- **Root cause:** Kubernetes has no start order; the pods started before Postgres accepted connections. Schema set-up runs once at start-up and, by design, a failure only logs (invariant 10), but nothing ever retried it. Compose hid this with `depends_on: service_healthy`; `/readyz` only checks that it can connect.
+- **Fix:** `StartupTasks.RetryInBackgroundAsync`: a failed set-up is retried with a doubling wait (`Persistence:SchemaRetrySeconds`, 5 s, at most 60 s) until it works. Verified on the cluster with Postgres and Redis scaled to 0 during an API restart: `retry_succeeded task="database"` 5–15 s after they came back, then snapshots and audit rows written.
+- **Prevention:** `DatabaseMissingAtStart_SchemaIsCreatedInTheBackground_OnceItAppears` (fails with the retry removed). Rule: every "do it once at start-up" step needs an answer for "the dependency was not there yet".
+
+### E-025: Raw VINs in logs written inside the source HTTP pipeline (Polly warnings; since D-014)
+- **Date:** 2026-10-31 · **Task:** Helm chart verification · **Severity:** high (privacy, invariant 7)
+- **Symptom:** A pod log line `breaker.shared_state_unavailable` carried `Uri` and `Scope` properties with `/sales/v1/vehicles/MA3EWB81S00100002/documents`. A new test showed Polly's own `Execution attempt` and `Resilience event occurred` warnings carried it too.
+- **Root cause:** `IHttpClientFactory`'s logging handler opens a scope `HTTP GET {Uri}` around each source call; Serilog copies scope properties onto every event logged inside it. E-007 dropped the request-path scope but not this one. `RawVin_NeverAppearsInAnyLogEvent` used a 500, which is not retried, so Polly never logged inside the scope; the agent's D-032 warning was the first in-pipeline log that a normal failure test hit.
+- **Fix:** `RemoveAllLoggers()` on both source clients (their own request logs were Information and filtered out anyway; adapters log each call with the masked VIN). Cluster re-check: 0 raw VINs in every pod's log.
+- **Prevention:** `RawVin_NeverAppearsInLogsWrittenInsideTheSourcePipeline` (503 ⇒ Polly retry, unreachable Redis ⇒ breaker fallback); red before the fix, and it lists the leaking events.
+
+### E-026: The shared breaker ran on local state on Kubernetes (warm-up too narrow, never retried)
+- **Date:** 2026-10-31 · **Task:** Helm chart verification · **Severity:** medium
+- **Symptom:** Three failures through pod A left pod B's circuit `closed`; pod A logged `breaker.shared_state_unavailable operation="record"`.
+- **Root cause:** E-022's warm-up (1) ran while Redis was not up yet, failed, and was never retried, and (2) only warmed `GET`: the first Lua `EVAL` (cold connection and code path) missed the 50 ms budget, so pod A used local state for 10 s exactly while it was tested. The first cache read on a new pod had the same cold-connect problem (E-019), so pod B's first search was a MISS.
+- **Fix:** `RedisCircuitStateStore.WarmUpAsync` runs every command (GET, the record script, SET NX, DEL) on `{warmup}` keys; the start-up warm-up is retried in the background like E-024; one best-effort cache read at start-up. Cluster re-check after forcing the start-order race: `retry_succeeded task="shared_circuit"`, pod B `open` and `circuit_open`, pod B's first search a HIT, 0 fallback warnings.
+- **Prevention:** `WarmUp_RunsEveryCommand_AndLeavesNoKeyOrCircuitBehind`; the replica tests now warm up as the API does. The sharing test itself had to move off production source budgets (E-001 rule).
+
+<!-- Add new errors above this line, continuing from E-027. -->
 
 ---
 
@@ -591,7 +619,14 @@ Evidence for the brief's "AI Engineering & Verification" criterion. Record **eve
 - **How it was caught:** each failure message read before any change; (d) by the full concurrent run; (e) by the agent's own review before running it, then a mutation (worker delayed 600 s) that must fail.
 - **Correction:** field names checked against the DTO; plain-text bodies not parsed; stale built as the aggregator does; the refresh test uses a WireMock scenario (500 then 200, no heal step) and waits on the cache itself. 6 concurrent full runs green afterwards. Lesson (again, AI-009): check names against the code, never from memory.
 
-<!-- Add new AI corrections above this line, continuing from AI-019. -->
+### AI-019: Agent's own start-up and privacy assumptions, found only by deploying to a real cluster
+- **Date / phase:** 2026-10-31 · implementation and verification (D-032, D-035)
+- **AI output:** (a) E-022's warm-up, called "the fix" after a compose check, assumed Redis is up at start-up and that one `GET` warms every path. (b) A new warning logged inside the HTTP pipeline, assumed safe because the message template held only the masked VIN. (c) In the tests: `.GetAwaiter().GetResult()` (AGENTS §4.11), and a CI step `! helm template …`, which `bash -e` can never fail.
+- **Problem:** (a) on Kubernetes the breaker silently stopped sharing (E-026); (b) raw VINs in logs through an inherited scope, which also exposed an older leak (E-025); (c) a rule break and a check that could not fail.
+- **How it was caught:** installing the chart on minikube and repeating the compose checks, including grepping every pod's log for raw VINs; the agent's own diff review for (c).
+- **Correction:** E-024–E-026; async helper; an explicit `if` loop in CI, run locally together with a case that must render. Lesson: compose's `depends_on` hides start-order bugs, and privacy must be checked on what is exported, including inherited scope properties (AI-008 again).
+
+<!-- Add new AI corrections above this line, continuing from AI-020. -->
 
 ---
 
