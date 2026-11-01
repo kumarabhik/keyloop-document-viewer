@@ -24,6 +24,7 @@ Keyloop technical assessment — **Scenario D**. A service advisor types one VIN
 8. [Observability](#8-observability)
 9. [Repository layout](#9-repository-layout)
 10. [AI Collaboration Narrative](#10-ai-collaboration-narrative)
+11. [VINs you can search](#11-vins-you-can-search)
 
 ---
 
@@ -562,19 +563,22 @@ On 2026-11-01 all of the tagged tests pass. The real-PostgreSQL version needs Do
 
 **What I learned about working with an agent:** it is fast and thorough when the target is written down and checkable, and it is most dangerous when it is confident about something nobody checked — a library default, a log format, a stack choice. The process above exists to turn those cases into failing tests or explicit questions as early as possible.
 
+## 11. VINs you can search
 
-# Part 2: VINs you can search
-These work in the UI (http://localhost:5173) and in PowerShell, with Docker running:
+These work in the demo UI (<http://localhost:5173>) and against the API (`GET /api/v1/vehicles/{vin}/documents`) with the stack running (Docker, Aspire or `dotnet run`):
 
-VIN	What it shows
-MA3EWB81S00100001	Normal: 4 Sales + 5 Service documents
-MA3EWB81S00100002	Sales only
-MA3EWB81S00100003	Service only (Sales says "not found")
-MA3EWB81S00100004	No documents anywhere: empty list, still a success
-MA3EWB81S00100005	Insurance expired, PUC expiring soon
-MA3EWB81S00100006	Duplicate: the same invoice in both systems
-MA3EWB81S00100007	Conflict: the same warranty with different expiry dates
-MA3EWB81S00100008	Long history (45 documents)
-MA3EWB81S00100009	Service sends one broken record: dropped and counted
-MA3EWB81S00100010	Documents with equal dates: sorted in a fixed order. Save this one for the 503 demo.
-BADVIN	Invalid VIN: the UI shows a hint and the API returns 400
+| VIN | What it shows |
+|---|---|
+| `MA3EWB81S00100001` | Normal: 4 Sales + 5 Service documents |
+| `MA3EWB81S00100002` | Sales only |
+| `MA3EWB81S00100003` | Service only (Sales answers 404 "not found") |
+| `MA3EWB81S00100004` | No documents anywhere: empty list, still a 200 success |
+| `MA3EWB81S00100005` | Insurance **expired**, PUC **expiring soon** |
+| `MA3EWB81S00100006` | **Duplicate:** the same invoice in both systems (`POSSIBLE_DUPLICATE`) |
+| `MA3EWB81S00100007` | **Conflict:** the same warranty with different expiry dates (`CONFLICT`) |
+| `MA3EWB81S00100008` | Long history (45 documents); try `?limit=20` for pagination |
+| `MA3EWB81S00100009` | Service sends one broken record: dropped and counted |
+| `MA3EWB81S00100010` | Documents with equal dates: sorted in a fixed order. Used for the 503 demo in [section 6](#6-failure-demo-fault-injection); search it there first, because a saved copy turns the 503 into a stale answer |
+| `BADVIN` | Invalid VIN: the UI shows a hint and the API returns 400 problem details |
+
+Any other valid 17-character VIN (for example `MA3EWB81S00100099`) returns an empty list. To show partial, stale, 503 and circuit-open states, switch the mocks' faults as in [section 6](#6-failure-demo-fault-injection).
