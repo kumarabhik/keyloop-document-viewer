@@ -440,7 +440,40 @@ The whole project was built with AI assistance: a chat assistant for the first-p
 - **Ask-first boundaries.** The agent must ask before choosing a framework, changing a status code, a timeout or retry, an invariant, or committing. This rule exists because the agent once picked the tech stack by itself (AI-006).
 - **Rules the build enforces.** Nullable reference types, warnings as errors, analyzers, `dotnet format` and an OpenAPI drift check (D-017) turn many AI mistakes into build failures instead of review findings.
 
-### 10.2 Verification: how AI output was checked
+### 10.2 Prompts: how the work was asked for
+
+There were two layers of prompting.
+
+**1. The standing prompt: [AGENTS.md](AGENTS.md).** Every session loads it automatically (through `CLAUDE.md`), so the important instructions never depend on what I remembered to type. The lines that mattered most:
+
+> *"Before writing any code, read the project Markdown files. They are the source of truth for progress, design and past decisions. After working, update them."*
+>
+> *"Stop and ask before you: choose or change the language, framework, or major library … change a timeout, retry, TTL, or breaker setting … commit, push …"*
+>
+> *"When a test fails, find out why before editing the test."*
+
+**2. Short session prompts.** Because the target and its acceptance criteria were already written in ROADMAP.md, the prompts I typed could stay short. Real examples from the sessions (spelling tidied):
+
+| What I typed | What it made the agent do | What it taught me |
+|---|---|---|
+| "Prepare a design.md, a roadmap.md with `[ ]` `[~]` `[x]` to mark progress, a systems.md of the important decisions, and a good agents.md. One rule should be: consult the md files to continue the progress. Important errors and decisions go in systems.md." | Created the four files that act as the project's memory | Put the plan in files, not in chat: any new session can reload it |
+| "Do the next 10 steps." | Take the next ten roadmap tasks in order, finish each against its written criteria, then report what was verified and what was not | A one-line prompt works only when "done" is already defined somewhere checkable |
+| "Wait, the role is for .NET and C#, so can you use .NET?" | Stop the Python scaffold and re-plan the design for idiomatic .NET (D-013) | The agent had *inferred* the stack from my GitHub history (AI-006). Requirement-level choices are now ask-first |
+| "Why does readyz fail? I don't get it." | Explain in plain terms, which surfaced a real design conflict: readiness failed on a database outage that searches survive | Asking "why" about something I did not understand exposed a design flaw (Q3 → D-024) |
+| "Write a context of this chat so a new chat understands where to start." | A short hand-over that points to the Markdown files and lists the open questions | Long sessions get slower and sloppier; short ones with written state do not |
+
+### 10.3 Review: how AI output was checked
+
+Every task went through the same loop:
+
+1. **Plan first.** The agent states the task ID, the files it will touch and how it will verify the result, before editing.
+2. **Tests from the acceptance criteria**, written with or before the code.
+3. **Build gates:** warnings are errors, analyzers, `dotnet format`, the coverage gate and the OpenAPI drift check (D-017).
+4. **Run it for real** when behaviour changes: the API and mocks locally, Docker Compose, Jaeger, and later a Kubernetes cluster.
+5. **Read the diff and the record.** The agent reviews its own diff; I read its summary, the new SYSTEMS.md entries, and the diff of anything risky (timeouts, privacy, persistence).
+6. **Independent passes.** A separate code-review run over the agent's own code (AI-013), and deploying to a new environment (AI-019), found bugs that passing tests had hidden.
+
+The checks that caught the most:
 
 | Check | Example |
 |---|---|
@@ -452,7 +485,52 @@ The whole project was built with AI assistance: a chat assistant for the first-p
 | Re-measure coverage after every task | An untested converter quietly dropped Domain coverage below its bar after the task was "done" (AI-007) |
 | Run it for real | Every task that touches runtime behaviour was also checked against the running stack (cURL / `Invoke-RestMethod`, Docker, Jaeger) |
 
-### 10.3 Where the AI was wrong (summary)
+### 10.4 A real mistake, start to finish: the VIN that leaked into the logs
+
+**The rule.** A VIN identifies a customer's car, so it is personal data. Invariant 7: *raw VINs never appear in logs or metric labels*; logs may show only the masked form `MA3**********0001` (D-011).
+
+**The mistake (AI-008).** On Day 2 the agent ran the API and both mocks, did some searches, searched the console log for the test VIN, found nothing, and reported invariant 7 as verified. That check was wrong. The default console output does not print *log scopes*, and the data that would actually be shipped to a log store was never examined.
+
+**How it was caught.** On Day 3 the logging task's acceptance criteria asked for an automated test. The test captures every event the API writes, renders it with the **same JSON formatter production uses**, and fails if the raw VIN appears anywhere:
+
+```csharp
+// tests/DocViewer.Api.Tests/LoggingTests.cs: RawVin_NeverAppearsInAnyLogEvent
+foreach (var json in events.Select(CollectingSink.Render))   // production RenderedCompactJsonFormatter
+{
+    json.ShouldNotContain("MA3EWB81S001000", Case.Insensitive);
+}
+```
+
+It failed on the first run. ASP.NET Core opens a logging scope for every request that includes `RequestPath`, and Serilog copies scope properties onto every event inside the request. So *every* log line during a search carried `RequestPath=/api/v1/vehicles/MA3EWB81S00100001/documents`, even lines whose message correctly showed the masked VIN. The tracing task then found the same problem in spans (`url.path`, `url.full`). A VIN with a typo (`…0000O`) also slipped past the first redaction regex, which only matched valid VIN characters, although a one-letter typo still identifies the car. Recorded as E-007.
+
+**How it was fixed.**
+
+| Where the VIN leaked | Fix |
+|---|---|
+| `RequestPath` on every log event | `DropRequestPathEnricher` removes the property before any sink sees it |
+| The access log line | Logs the route template `/api/v1/vehicles/{vin}/documents`, never the path |
+| Span tags and span names | `VinRedactionProcessor` masks every standalone 17-character token before export, valid VIN or not, and leaves a 32-character trace id untouched |
+
+**It came back, and the tests explain why (E-025).** Days later, while deploying to Kubernetes, the agent grepped every pod's log and found a raw VIN inside a Polly retry warning. `IHttpClientFactory` opens its own scope, `HTTP GET {Uri}`, around each call to a source system. The original test used an HTTP 500, which is never retried, so Polly never logged inside that scope and the test stayed green. A new test forces logging inside the pipeline: a 503 (retried) plus an unreachable Redis (breaker fallback warning). It failed before the fix and names the leaking events. The fix removed the HttpClient logging handler from the source clients; the adapters already log each call with the masked VIN.
+
+**The tests that now guard it.** All are tagged `[Trait("Invariant", "7")]` and run in CI (`dotnet test --filter "Invariant=7"`):
+
+| Test | What it proves |
+|---|---|
+| `LoggingTests.RawVin_NeverAppearsInAnyLogEvent` | Valid, lower-case and invalid VIN searches: no raw VIN in any rendered log event; the masked VIN is present |
+| `LoggingTests.RawVin_NeverAppearsInLogsWrittenInsideTheSourcePipeline` | The same when Polly retries and the breaker falls back, i.e. logs written inside the HttpClient scope (E-025) |
+| `TelemetryTests.ExportedSpans_NeverContainRawVin` | No raw VIN in any exported span tag or span name, including the invalid-VIN request |
+| `TelemetryTests.Metrics_AreExposedInPrometheusFormat_WithoutVinLabels` | The `/metrics` text, as Prometheus scrapes it, has no VIN in any label |
+| `AggregationServiceTests.Metrics_CircuitGauge_ReportsEachSourceWithoutVin` | The circuit-state gauge carries only a `source` tag |
+| `EfSearchAuditWriterTests.Write_StoresSaltedHash_NeverTheRawVin` (+ a real-PostgreSQL version) | The audit table stores a salted hash, never the VIN |
+
+`VinRedactionTests` (untagged unit tests) pin the masking rule itself: valid, lower-case and invalid VIN-shaped tokens are masked; trace ids, route templates and 16-character values are left alone.
+
+On 2026-11-01 all of the tagged tests pass. The real-PostgreSQL version needs Docker: it is skipped, with the reason printed, on a machine without Docker, and runs in CI.
+
+**What changed in the process.** Privacy is verified on **what leaves the process**, in the format that leaves it (log JSON, span tags, Prometheus text), never on a human-readable view. And a test is only as good as the failure it actually triggers: the first test was green while the bug existed, because it never made the code log inside the pipeline (AI-010, AI-019).
+
+### 10.5 Every place the AI was wrong (summary)
 
 | ID | What the AI proposed | Why it was wrong | Caught by |
 |---|---|---|---|
@@ -475,7 +553,7 @@ The whole project was built with AI assistance: a chat assistant for the first-p
 | AI-017 | A missing Redis key assumed not to parse as a number | Closed circuits read as half-open: one failure would open the shared breaker | Real-Redis Testcontainers test; mutation run |
 | AI-018 | Auth tests written from memory (a wire field name), a refresh test with a timing race | Tests failing for the wrong reason, and one that could flake under load | Reading each failure message; a run with every project in parallel |
 
-### 10.4 Quality: what the process produced
+### 10.6 Quality: what the process produced
 
 - 365 automated tests plus contract fuzzing in CI; coverage Domain 99 %, Application 98 %, Infrastructure 94 %, Api 95 %, Web 91 % (gate: 85 % on Domain + Application).
 - Every invariant in SYSTEMS.md §6 is guarded by a tagged test; every row of the failure matrix (DESIGN §6.3) is automated.
@@ -483,3 +561,20 @@ The whole project was built with AI assistance: a chat assistant for the first-p
 - The submission runs from a clean clone with one command and no secrets.
 
 **What I learned about working with an agent:** it is fast and thorough when the target is written down and checkable, and it is most dangerous when it is confident about something nobody checked — a library default, a log format, a stack choice. The process above exists to turn those cases into failing tests or explicit questions as early as possible.
+
+
+# Part 2: VINs you can search
+These work in the UI (http://localhost:5173) and in PowerShell, with Docker running:
+
+VIN	What it shows
+MA3EWB81S00100001	Normal: 4 Sales + 5 Service documents
+MA3EWB81S00100002	Sales only
+MA3EWB81S00100003	Service only (Sales says "not found")
+MA3EWB81S00100004	No documents anywhere: empty list, still a success
+MA3EWB81S00100005	Insurance expired, PUC expiring soon
+MA3EWB81S00100006	Duplicate: the same invoice in both systems
+MA3EWB81S00100007	Conflict: the same warranty with different expiry dates
+MA3EWB81S00100008	Long history (45 documents)
+MA3EWB81S00100009	Service sends one broken record: dropped and counted
+MA3EWB81S00100010	Documents with equal dates: sorted in a fixed order. Save this one for the 503 demo.
+BADVIN	Invalid VIN: the UI shows a hint and the API returns 400
